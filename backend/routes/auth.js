@@ -9,18 +9,31 @@ const router = express.Router();
 // POST /api/auth/register
 router.post("/auth/register", async (req, res) => {
   try {
-    const { name, email, password} = req.body;
+    const { name, email, password, isIIIT} = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ ok: false, error: "name, email, password are required" });
     }
+
+    const e = email.toLowerCase().trim();
+    const allowed = ["iiit.ac.in", "students.iiit.ac.in", "research.iiit.ac.in"];
+    const domain = e.split("@")[1] || "";
+
+    if (isIIIT === true && !allowed.includes(domain)) {
+      return res.status(400).json({
+        ok: false,
+        error: "IIIT participants must use an IIIT-issued email",
+        allowedDomains: allowed,
+      });
+    }
+
 
     // Basic role rule for now: allow only participant self-register
     const finalRole = "participant";
 
     const users = usersCol();
 
-    const existing = await users.findOne({ email: email.toLowerCase() });
+    const existing = await users.findOne({ email: e });
     if (existing) {
       return res.status(409).json({ ok: false, error: "Email already registered" });
     }
@@ -29,9 +42,10 @@ router.post("/auth/register", async (req, res) => {
 
     const doc = {
       name,
-      email: email.toLowerCase(),
+      email: e,
       passwordHash,
       role: finalRole,
+      isIIIT: isIIIT === true,
       createdAt: new Date(),
     };
 
