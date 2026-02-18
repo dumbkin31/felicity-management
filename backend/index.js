@@ -8,7 +8,8 @@ const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
 const eventRoutes = require("./routes/events");
 const participantRoutes = require("./routes/participants");
-const organizerRoutes = require("./routes/organizers");
+const organizersPublicRoutes = require("./routes/organizers-public");
+const organizersPrivateRoutes = require("./routes/organizers-private");
 
 
 const app = express();

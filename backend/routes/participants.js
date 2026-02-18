@@ -1,6 +1,6 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
-const { participantsCol, organizersCol } = require("../config/collections");
+const { participantsCol, organizersCol, eventsCol, registrationsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
 
@@ -13,6 +13,87 @@ function toObjectId(id) {
     return null;
   }
 }
+
+// GET /api/participants/dashboard - Participant dashboard
+router.get("/participants/dashboard", requireAuth, requireRole("participant"), async (req, res) => {
+  try {
+    const participantId = req.user.sub;
+
+    // Get all registrations for this participant
+    const registrations = await registrationsCol()
+      .find({ participantId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Get event IDs to fetch event details
+    const eventIds = [...new Set(registrations.map((r) => toObjectId(r.eventId)).filter(Boolean))];
+    const events = await eventsCol()
+      .find({ _id: { $in: eventIds } })
+      .toArray();
+
+    // Create event lookup map
+    const eventMap = {};
+    events.forEach((e) => {
+      eventMap[e._id.toString()] = e;
+    });
+
+    const now = new Date();
+
+    // Categorize registrations
+    const upcoming = [];
+    const history = {
+      normal: [],
+      merchandise: [],
+      completed: [],
+      cancelled: [],
+    };
+
+    registrations.forEach((reg) => {
+      const event = eventMap[reg.eventId];
+      if (!event) return;
+
+      const record = {
+        ticketId: reg.ticketId,
+        eventName: reg.eventName,
+        eventType: reg.eventType,
+        organizerUserId: event.organizerUserId,
+        status: reg.status,
+        participantName: reg.participantName,
+        quantity: reg.quantity,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        createdAt: reg.createdAt,
+        qrCode: reg.qrCode,
+      };
+
+      // Upcoming events (not yet ended, confirmed status)
+      if (new Date(event.endAt) >= now && reg.status === "confirmed") {
+        upcoming.push(record);
+      }
+
+      // History categorization
+      if (new Date(event.endAt) < now && reg.status === "confirmed") {
+        history.completed.push(record);
+      } else if (reg.status === "cancelled" || reg.status === "rejected") {
+        history.cancelled.push(record);
+      } else if (reg.eventType === "normal") {
+        history.normal.push(record);
+      } else if (reg.eventType === "merch") {
+        history.merchandise.push(record);
+      }
+    });
+
+    return res.json({
+      ok: true,
+      dashboard: {
+        upcoming,
+        history,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // GET /api/participants/me
 router.get("/participants/me", requireAuth, requireRole("participant"), async (req, res) => {

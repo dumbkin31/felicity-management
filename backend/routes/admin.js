@@ -1,10 +1,53 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const { ObjectId } = require("mongodb");
 const { organizersCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
 
 const router = express.Router();
+
+function toObjectId(id) {
+  try {
+    return new ObjectId(id);
+  } catch (err) {
+    return null;
+  }
+}
+
+// GET /api/admin/dashboard - Admin dashboard
+router.get("/admin/dashboard", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    // Get all organizers
+    const organizers = await organizersCol()
+      .find(
+        {},
+        {
+          projection: {
+            organizerName: 1,
+            category: 1,
+            description: 1,
+            contactEmail: 1,
+            contactNumber: 1,
+            createdAt: 1,
+            createdByAdminId: 1,
+          },
+        }
+      )
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    return res.json({
+      ok: true,
+      dashboard: {
+        totalOrganizers: organizers.length,
+        organizers,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // POST /api/admin/organizers
 // Body: { name, email, password }
@@ -39,6 +82,24 @@ router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, 
 
     const result = await organizers.insertOne(doc);
     return res.status(201).json({ ok: true, organizerId: result.insertedId });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// DELETE /api/admin/organizers/:id - Remove organizer
+router.delete("/admin/organizers/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const organizerId = toObjectId(req.params.id);
+    if (!organizerId) return res.status(400).json({ ok: false, error: "Invalid organizer id" });
+
+    const result = await organizersCol().deleteOne({ _id: organizerId });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ ok: false, error: "Organizer not found" });
+    }
+
+    return res.json({ ok: true, message: "Organizer deleted successfully" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
