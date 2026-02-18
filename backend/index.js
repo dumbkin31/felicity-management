@@ -20,8 +20,9 @@ app.use("/api", healthRoutes);
 app.use("/api", authRoutes);
 app.use("/api", adminRoutes);
 app.use("/api", eventRoutes);
-app.use("/api", organizerRoutes);
 app.use("/api", participantRoutes);
+app.use("/api", organizersPublicRoutes);
+app.use("/api", organizersPrivateRoutes);
 
 
 const PORT = process.env.PORT || 5000;
