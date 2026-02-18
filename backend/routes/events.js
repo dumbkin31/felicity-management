@@ -3,6 +3,8 @@ const { ObjectId } = require("mongodb");
 const { eventsCol, organizersCol, registrationsCol, participantsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
+const { generateQRCode } = require("../utils/qrcode");
+const { sendTicketEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -250,6 +252,10 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
     const { formData } = req.body;
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+    // Generate QR code
+    const qrData = JSON.stringify({ ticketId, eventId: eventId.toString(), participantId: participantId.toString() });
+    const qrCodeDataUrl = await generateQRCode(qrData);
+
     const registration = {
       ticketId,
       eventId: eventId.toString(),
@@ -260,10 +266,25 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
       participantEmail: participant.email,
       status: "confirmed",
       formData: formData || {},
+      qrCode: qrCodeDataUrl,
       createdAt: new Date(),
     };
 
     await registrationsCol().insertOne(registration);
+
+    // Send confirmation email
+    await sendTicketEmail({
+      to: participant.email,
+      participantName: registration.participantName,
+      eventName: event.name,
+      ticketId,
+      qrCodeDataUrl,
+      eventType: event.type,
+      eventDetails: {
+        startAt: event.startAt,
+        endAt: event.endAt,
+      },
+    });
 
     return res.status(201).json({
       ok: true,
@@ -271,6 +292,7 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
         ticketId,
         eventName: event.name,
         status: "confirmed",
+        qrCode: qrCodeDataUrl,
       },
     });
   } catch (err) {
@@ -352,6 +374,10 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
     // Create purchase registration
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+    // Generate QR code
+    const qrData = JSON.stringify({ ticketId, eventId: eventId.toString(), participantId: participantId.toString(), quantity: qty });
+    const qrCodeDataUrl = await generateQRCode(qrData);
+
     const registration = {
       ticketId,
       eventId: eventId.toString(),
@@ -363,6 +389,7 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       status: "confirmed",
       variant: variant || {},
       quantity: qty,
+      qrCode: qrCodeDataUrl,
       createdAt: new Date(),
     };
 
@@ -374,6 +401,20 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       { $inc: { "merchandise.stockQty": -qty } }
     );
 
+    // Send confirmation email
+    await sendTicketEmail({
+      to: participant.email,
+      participantName: registration.participantName,
+      eventName: event.name,
+      ticketId,
+      qrCodeDataUrl,
+      eventType: event.type,
+      eventDetails: {
+        quantity: qty,
+        variant,
+      },
+    });
+
     return res.status(201).json({
       ok: true,
       registration: {
@@ -381,6 +422,7 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
         eventName: event.name,
         quantity: qty,
         status: "confirmed",
+        qrCode: qrCodeDataUrl,
       },
     });
   } catch (err) {
