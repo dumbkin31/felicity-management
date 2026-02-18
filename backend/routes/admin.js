@@ -1,6 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const { usersCol } = require("../config/collections");
+const { organizersCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
 
@@ -17,9 +17,9 @@ router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, 
     }
 
     const e = email.toLowerCase().trim();
-    const users = usersCol();
+    const organizers = organizersCol();
 
-    const existing = await users.findOne({ email: e });
+    const existing = await organizers.findOne({ email: e });
     if (existing) {
       return res.status(409).json({ ok: false, error: "Email already exists" });
     }
@@ -27,15 +27,17 @@ router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, 
     const passwordHash = await bcrypt.hash(password, 12);
 
     const doc = {
-      name,
-      email: e,
+      organizerName: name,
+      category: req.body.category || "",
+      description: req.body.description || "",
+      contactEmail: e,
+      contactNumber: req.body.contactNumber || "",
       passwordHash,
-      role: "organizer",
       createdAt: new Date(),
-      createdBy: req.user.sub,
+      createdByAdminId: req.user.sub,
     };
 
-    const result = await users.insertOne(doc);
+    const result = await organizers.insertOne(doc);
     return res.status(201).json({ ok: true, organizerId: result.insertedId });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

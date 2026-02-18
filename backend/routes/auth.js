@@ -1,7 +1,8 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { usersCol } = require("../config/collections");
+const { participantsCol, organizersCol, adminsCol } = require("../config/collections");
+
 
 const router = express.Router();
 
@@ -9,10 +10,13 @@ const router = express.Router();
 // POST /api/auth/register
 router.post("/auth/register", async (req, res) => {
   try {
-    const { name, email, password, isIIIT} = req.body;
+    const { firstName, lastName, email, password, isIIIT } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ ok: false, error: "name, email, password are required" });
+    const finalFirst = (firstName || "").trim();
+    const finalLast = (lastName || "").trim();
+
+    if (!finalFirst || !email || !password) {
+      return res.status(400).json({ ok: false, error: "firstName, email, password are required" });
     }
 
     const e = email.toLowerCase().trim();
@@ -31,9 +35,10 @@ router.post("/auth/register", async (req, res) => {
     // Basic role rule for now: allow only participant self-register
     const finalRole = "participant";
 
-    const users = usersCol();
+    const participants = participantsCol();
 
-    const existing = await users.findOne({ email: e });
+
+    const existing = await participants.findOne({ email: e });
     if (existing) {
       return res.status(409).json({ ok: false, error: "Email already registered" });
     }
@@ -41,15 +46,20 @@ router.post("/auth/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const doc = {
-      name,
+      firstName: finalFirst,
+      lastName: finalLast,
       email: e,
+      participantType: isIIIT === true ? "iiit" : "non-iiit",
+      collegeOrOrgName: "",
+      contactNumber: "",
+      interests: [],
+      followedOrganizerIds: [],
       passwordHash,
-      role: finalRole,
-      isIIIT: isIIIT === true,
       createdAt: new Date(),
     };
 
-    const result = await users.insertOne(doc);
+
+    const result = await participants.insertOne(doc);
 
     return res.status(201).json({ ok: true, userId: result.insertedId, role: finalRole });
   } catch (err) {
@@ -67,8 +77,20 @@ router.post("/auth/login", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email and password are required" });
     }
 
-    const users = usersCol();
-    const user = await users.findOne({ email: email.toLowerCase() });
+    const e = email.toLowerCase().trim();
+
+    let user = await participantsCol().findOne({ email: e });
+    let role = "participant";
+
+    if (!user) {
+      user = await organizersCol().findOne({ contactEmail: e });
+      role = "organizer";
+    }
+
+    if (!user) {
+      user = await adminsCol().findOne({ email: e });
+      role = "admin";
+    }
 
     if (!user) {
       return res.status(401).json({ ok: false, error: "Invalid credentials" });
@@ -80,7 +102,7 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      { sub: user._id.toString(), role: user.role, email: user.email },
+      { sub: user._id.toString(), role, email: e },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -88,8 +110,9 @@ router.post("/auth/login", async (req, res) => {
     return res.json({
       ok: true,
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: { id: user._id, name: user.firstName || user.organizerName || "Admin", email: e, role },
     });
+
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

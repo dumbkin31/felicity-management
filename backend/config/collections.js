@@ -1,13 +1,23 @@
 const { getDB } = require("./db");
 
-function usersCol() {
-  return getDB().collection("users");
+function participantsCol() {
+  return getDB().collection("participants");
 }
 
-module.exports.usersCol = usersCol;
+function organizersCol() {
+  return getDB().collection("organizers");
+}
+
+function adminsCol() {
+  return getDB().collection("admins");
+}
 
 function eventsCol() {
   return getDB().collection("events");
 }
 
-module.exports.eventsCol = eventsCol;
+function registrationsCol() {
+  return getDB().collection("registrations");
+}
+
+module.exports = { participantsCol, organizersCol, adminsCol, eventsCol, registrationsCol };
