@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -49,14 +49,17 @@ const styles = {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     padding: "1rem 0",
     boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+    width: "100%",
+    boxSizing: "border-box",
   },
   container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "0 20px",
+    width: "100%",
+    margin: "0",
+    padding: "0 40px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    boxSizing: "border-box",
   },
   logo: {
     color: "white",
