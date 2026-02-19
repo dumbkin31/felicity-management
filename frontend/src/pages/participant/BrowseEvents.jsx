@@ -31,7 +31,7 @@ export default function BrowseEvents() {
     try {
       const [trendingRes, organizersRes] = await Promise.all([
         api.get("/events/trending"),
-        api.get("/organizers-public")
+        api.get("/organizers")
       ]);
       setTrending(trendingRes.data.events || []);
       setOrganizers(organizersRes.data.organizers || []);

@@ -47,7 +47,7 @@ export default function Profile() {
 
   const fetchOrganizers = async () => {
     try {
-      const response = await api.get("/organizers-public");
+      const response = await api.get("/organizers");
       setOrganizers(response.data.organizers || []);
     } catch (err) {
       console.error("Failed to fetch organizers:", err);
