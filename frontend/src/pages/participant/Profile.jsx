@@ -419,7 +419,7 @@ export default function Profile() {
             <div className="organizers-grid">
               {organizers.map((org) => (
                 <div key={org._id} className="organizer-card">
-                  <h3>{org.name}</h3>
+                  <h3>{org.organizerName}</h3>
                   <p className="org-email">{org.email}</p>
                   <p className="org-description">{org.description || "No description"}</p>
                   <button

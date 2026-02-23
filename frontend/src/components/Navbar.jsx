@@ -35,6 +35,7 @@ export default function Navbar() {
               <Link to="/organizer/ongoing-events" style={styles.link}>Ongoing Events</Link>
               <Link to="/organizer/events/create" style={styles.link}>Create Event</Link>
               <Link to="/organizer/profile" style={styles.link}>Profile</Link>
+              <Link to="/organizer/password-reset" style={styles.link}>Password Reset</Link>
             </>
           )}
 
@@ -42,7 +43,7 @@ export default function Navbar() {
             <>
               <Link to="/admin/dashboard" style={styles.link}>Dashboard</Link>
               <Link to="/admin/organizers" style={styles.link}>Manage Organizers</Link>
-              <Link to="/admin/password-reset-requests" style={styles.link}>Password Reset Requests</Link>
+              <Link to="/admin/password-resets" style={styles.link}>Password Resets</Link>
             </>
           )}
 

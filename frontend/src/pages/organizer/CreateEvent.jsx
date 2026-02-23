@@ -89,6 +89,21 @@ export default function CreateEvent() {
     setVariants(variants.filter((_, i) => i !== index));
   };
 
+  // Handle tag changes
+  const handleAddTag = () => {
+    setSelectedTags([...selectedTags, ""]);
+  };
+
+  const handleRemoveTag = (index) => {
+    setSelectedTags(selectedTags.filter((_, idx) => idx !== index));
+  };
+
+  const handleTagChange = (index, value) => {
+    const updatedTags = [...selectedTags];
+    updatedTags[index] = value;
+    setSelectedTags(updatedTags);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -242,24 +257,38 @@ export default function CreateEvent() {
 
           <div className="form-group">
             <label>Event Tags</label>
-            <div className="tags-selector">
-              {PREDEFINED_INTERESTS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`tag-option ${selectedTags.includes(tag) ? "selected" : ""}`}
-                  onClick={() => {
-                    setSelectedTags((prev) =>
-                      prev.includes(tag)
-                        ? prev.filter((t) => t !== tag)
-                        : [...prev, tag]
-                    );
-                  }}
+            {selectedTags.map((tag, idx) => (
+              <div key={idx} style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
+                <select
+                  value={tag}
+                  onChange={(e) => handleTagChange(idx, e.target.value)}
+                  style={{flex: 1}}
                 >
-                  {tag}
+                  <option value="">Select a tag</option>
+                  {PREDEFINED_INTERESTS.map((interest) => (
+                    <option key={interest} value={interest}>
+                      {interest}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(idx)}
+                  className="cancel-btn"
+                  style={{padding: '8px 16px'}}
+                >
+                  Remove
                 </button>
-              ))}
-            </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={handleAddTag}
+              className="submit-btn"
+              style={{backgroundColor: '#2196f3', marginTop: '10px'}}
+            >
+              + Add Tag
+            </button>
           </div>
         </section>
 

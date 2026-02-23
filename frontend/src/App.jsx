@@ -22,10 +22,13 @@ import CreateEvent from "./pages/organizer/CreateEvent";
 import EditEvent from "./pages/organizer/EditEvent";
 import OrganizerEventDetails from "./pages/organizer/EventDetails";
 import OngoingEvents from "./pages/organizer/OngoingEvents";
+import PaymentApprovals from "./pages/organizer/PaymentApprovals";
+import PasswordResetRequest from "./pages/organizer/PasswordResetRequest";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import ManageOrganizers from "./pages/admin/ManageOrganizers";
+import ManagePasswordResets from "./pages/admin/ManagePasswordResets";
 
 // Other
 import Unauthorized from "./pages/Unauthorized";
@@ -164,6 +167,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/organizer/events/:eventId/payments"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <PaymentApprovals />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/password-reset"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <PasswordResetRequest />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Admin routes */}
           <Route
@@ -179,6 +198,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={["admin"]}>
                 <ManageOrganizers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/password-resets"
+            element={
+              <ProtectedRoute roles={["admin"]}>
+                <ManagePasswordResets />
               </ProtectedRoute>
             }
           />

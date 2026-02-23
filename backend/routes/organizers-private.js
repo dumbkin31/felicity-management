@@ -137,6 +137,8 @@ router.get("/organizer/events/:id/details", requireAuth, requireRole("organizer"
         registrationLimit: event.registrationLimit,
         registrationFee: event.registrationFee,
         tags: event.tags,
+        formSchema: event.formSchema,
+        merchandise: event.merchandise,
       },
       analytics,
       participants,

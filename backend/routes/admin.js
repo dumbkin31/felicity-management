@@ -4,7 +4,6 @@ const { ObjectId } = require("mongodb");
 const { organizersCol, participantsCol, eventsCol, registrationsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
-const { sendOrganizerCredentialsEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -110,14 +109,7 @@ router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, 
 
     const result = await organizers.insertOne(doc);
     
-    // Send credentials email to organizer's contact email
-    await sendOrganizerCredentialsEmail({
-      to: contactEmail,
-      organizerName: name,
-      loginEmail,
-      password: autoPassword,
-    });
-    
+    // Return credentials to admin for manual sharing
     return res.status(201).json({ 
       ok: true, 
       organizerId: result.insertedId, 

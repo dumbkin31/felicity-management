@@ -72,6 +72,7 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
       completed: [],
       cancelled: [],
     };
+    const pendingPayments = [];
 
     registrations.forEach((reg) => {
       const event = eventMap[reg.eventId];
@@ -91,7 +92,16 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
         endAt: event.endAt,
         createdAt: reg.createdAt,
         qrCode: reg.qrCode,
+        paymentStatus: reg.paymentStatus,
+        paymentProof: reg.paymentProof,
+        _id: reg._id.toString(),
       };
+
+      // Pending payment registrations
+      if (reg.status === "pending_payment") {
+        pendingPayments.push(record);
+        return;
+      }
 
       // Upcoming events (not yet ended, confirmed status)
       if (new Date(event.endAt) >= now && reg.status === "confirmed") {
@@ -113,6 +123,7 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
     return res.json({
       ok: true,
       dashboard: {
+        pendingPayments,
         upcoming,
         history,
       },

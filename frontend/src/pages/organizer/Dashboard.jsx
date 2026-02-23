@@ -190,7 +190,7 @@ export default function OrganizerDashboard() {
                   <div className="col-regs">{event.totalRegistrations || 0}</div>
                   <div className="col-actions">
                     <Link
-                      to={`/organizer/events/${event._id}`}
+                      to={`/organizer/events/${event._id}/edit`}
                       className="action-btn edit-btn"
                     >
                       Edit

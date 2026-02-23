@@ -343,3 +343,130 @@
   font-size: 18px;
   color: #666;
 }
+/* Credentials Modal */
+.credentials-modal {
+  max-width: 600px;
+}
+
+.success-header {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+}
+
+.credentials-content {
+  padding: 24px;
+}
+
+.credentials-info {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 16px;
+  margin-bottom: 24px;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.credentials-info strong {
+  color: #d9534f;
+}
+
+.credential-box {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.credential-box label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #667eea;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.credential-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.credential-value span {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  font-size: 15px;
+  color: #333;
+  word-break: break-all;
+}
+
+.password-text {
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.copy-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: #5568d3;
+  transform: scale(1.05);
+}
+
+.credentials-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.copy-all-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-all-btn:hover {
+  background: #5568d3;
+}
+
+.done-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.done-btn:hover {
+  background: #45a049;
+}

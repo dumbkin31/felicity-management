@@ -51,6 +51,10 @@ export function AuthProvider({ children }) {
 
   const register = async (userData) => {
     const response = await api.post("/auth/register", userData);
+    // After registration, automatically log the user in
+    if (response.data.ok) {
+      return await login(userData.email, userData.password);
+    }
     return response.data;
   };
 

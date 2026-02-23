@@ -204,8 +204,99 @@
   font-weight: 600;
 }
 
+.status-pending {
+  color: #ff9800;
+  font-weight: 600;
+}
+
+/* Pending Payments Section */
+.pending-payments-section h2 {
+  color: #ff9800;
+  border-bottom-color: #ff9800;
+}
+
+.pending-payments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.payment-card {
+  background: white;
+  border: 2px solid #ff9800;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.payment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.payment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.payment-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.payment-details {
+  margin: 15px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.payment-details p {
+  margin: 8px 0;
+}
+
+.payment-proof-upload {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.payment-proof-upload p {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #333;
+}
+
+.payment-proof-upload input[type="file"] {
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 @media (max-width: 768px) {
   .events-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-payments-grid {
     grid-template-columns: 1fr;
   }
 

@@ -18,10 +18,14 @@ export default function EventDetails() {
   const [blockingReasons, setBlockingReasons] = useState(null);
 
   // For merchandise
-  const [quantity, setQuantity] = useState(1);
+  const [variantQuantities, setVariantQuantities] = useState({});
 
   // For custom form fields
   const [formData, setFormData] = useState({});
+
+  // For payment
+  const [paymentProof, setPaymentProof] = useState(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   useEffect(() => {
     fetchEventDetails();
@@ -68,8 +72,36 @@ export default function EventDetails() {
       setRegistering(true);
       setError("");
 
-      if (event.type === "merchandise") {
-        const response = await api.post(`/events/${id}/purchase`, { quantity });
+      if (event.type === "merch") {
+        // Check if at least one variant has quantity selected
+        const totalQty = Object.values(variantQuantities).reduce((sum, q) => sum + q, 0);
+        if (totalQty === 0) {
+          setError("Please select quantity for at least one variant");
+          setRegistering(false);
+          return;
+        }
+
+        // Check purchase limit per participant
+        const purchaseLimit = event.merchandise?.purchaseLimitPerParticipant || 1;
+        if (totalQty > purchaseLimit) {
+          setError(`Maximum ${purchaseLimit} item(s) per participant. You selected ${totalQty}`);
+          setRegistering(false);
+          return;
+        }
+
+        // Build variant purchases array
+        const purchases = event.merchandise.variants
+          .map((variant, idx) => ({
+            variantIndex: idx,
+            size: variant.size,
+            color: variant.color,
+            sku: variant.sku,
+            price: variant.price,
+            quantity: variantQuantities[idx] || 0
+          }))
+          .filter(p => p.quantity > 0);
+
+        const response = await api.post(`/events/${id}/purchase`, { purchases });
         setTicketData(response.data.registration);
       } else {
         // Validate required fields
@@ -98,6 +130,53 @@ export default function EventDetails() {
     setFormData(prev => ({ ...prev, [fieldLabel]: value }));
   };
 
+  const handleVariantQuantityChange = (variantIndex, qty) => {
+    setVariantQuantities(prev => ({
+      ...prev,
+      [variantIndex]: Math.max(0, parseInt(qty) || 0)
+    }));
+  };
+
+  const handleUploadPaymentProof = async (ticketId) => {
+    if (!paymentProof) {
+      setError("Please select a payment proof file");
+      return;
+    }
+
+    try {
+      setUploadingProof(true);
+      
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64String = reader.result;
+          const response = await api.post(
+            `/participants/registrations/${ticketId}/payment-proof`,
+            { paymentProof: base64String }
+          );
+
+          if (response.data.ok) {
+            alert("Payment proof uploaded successfully! Waiting for organizer approval...");
+            setPaymentProof(null);
+          }
+        } catch (err) {
+          setError(err.response?.data?.error || "Failed to upload payment proof");
+        } finally {
+          setUploadingProof(false);
+        }
+      };
+      reader.onerror = () => {
+        setError("Failed to read file");
+        setUploadingProof(false);
+      };
+      reader.readAsDataURL(paymentProof);
+    } catch (err) {
+      setError("Error processing file");
+      setUploadingProof(false);
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -124,6 +203,8 @@ export default function EventDetails() {
   }
 
   if (registrationSuccess) {
+    const requiresPayment = event.registrationFee > 0 || event.type === "merch";
+
     return (
       <>
         <Navbar />
@@ -132,9 +213,52 @@ export default function EventDetails() {
             <h1>✅ Registration Successful!</h1>
             <div className="ticket-info">
               <h2>{event.name}</h2>
-              <p><strong>Ticket ID:</strong> {ticketData.ticketId}</p>
+              {ticketData.ticketId && (
+                <p><strong>Ticket ID:</strong> {ticketData.ticketId}</p>
+              )}
               <p><strong>Status:</strong> {ticketData.status}</p>
-              {ticketData.qrCode && (
+
+              {requiresPayment && ticketData.status === "pending_payment" && (
+                <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3cd', borderRadius: '5px' }}>
+                  <h3>⏳ Payment Required</h3>
+                  <p>Please upload your payment proof to complete the registration.</p>
+                  
+                  <div style={{ marginTop: '15px' }}>
+                    <label htmlFor="payment-proof" style={{ display: 'block', marginBottom: '10px' }}>
+                      <strong>Upload Payment Screenshot:</strong>
+                    </label>
+                    <input
+                      id="payment-proof"
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                      disabled={uploadingProof}
+                      style={{ marginBottom: '10px' }}
+                    />
+                    <button
+                      onClick={() => handleUploadPaymentProof(ticketData.ticketId)}
+                      disabled={uploadingProof || !paymentProof}
+                      style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#4caf50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {uploadingProof ? "Uploading..." : "Submit Payment Proof"}
+                    </button>
+                  </div>
+
+                  <p style={{ marginTop: '15px', fontSize: '0.9em', color: '#666' }}>
+                    Your organizer will review your payment and approve/reject it. You'll receive an email notification.
+                  </p>
+                </div>
+              )}
+
+              {ticketData.qrCode && ticketData.status !== "pending_payment" && (
                 <div className="qr-code">
                   <h3>Your QR Code:</h3>
                   <img src={ticketData.qrCode} alt="QR Code" />
@@ -192,9 +316,9 @@ export default function EventDetails() {
               </div>
               <div className="detail-item">
                 <strong>Eligibility:</strong>
-                <span>{event.eligibility === "iiith-only" ? "IIIT-H Only" : "Open to All"}</span>
+                <span>{event.eligibility === "iiit" ? "IIIT-H Only" : event.eligibility === "non-iiit" ? "Non-IIIT Only" : "Open to All"}</span>
               </div>
-              {event.type === "merchandise" && (
+              {event.type === "merch" && (
                 <>
                   <div className="detail-item">
                     <strong>Price:</strong>
@@ -210,6 +334,12 @@ export default function EventDetails() {
                 <div className="detail-item">
                   <strong>Max Participants:</strong>
                   <span>{event.maxParticipants}</span>
+                </div>
+              )}
+              {event.type === "normal" && event.registrationFee && (
+                <div className="detail-item">
+                  <strong>Registration Fee:</strong>
+                  <span className="price">₹{event.registrationFee}</span>
                 </div>
               )}
             </div>
@@ -284,11 +414,17 @@ export default function EventDetails() {
                       ⚠️ Stock exhausted
                     </div>
                   )}
-                  {blockingReasons.notPublished && (
+                  {blockingReasons.eventCompleted && (
+                    <div className="warning-message">
+                      ⚠️ Event has been completed
+                    </div>
+                  )}
+                  {blockingReasons.notPublished && !blockingReasons.eventCompleted && (
                     <div className="warning-message">
                       ⚠️ Event not published yet
                     </div>
                   )}
+                  
                 </div>
               )}
 
@@ -333,19 +469,75 @@ export default function EventDetails() {
                 </div>
               )}
 
-              {event.type === "merchandise" && (
-                <div className="quantity-selector">
-                  <label htmlFor="quantity">Quantity:</label>
-                  <input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    max={event.merchandise?.stockQty ?? event.stock ?? 1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    disabled={registering}
-                  />
-                  <p className="total-price">Total: ₹{(event.merchandise?.price || event.price || 0) * quantity}</p>
+              {event.type === "merch" && event.merchandise?.variants?.length > 0 && (
+                <div className="variants-selector">
+                  <h3>Select Variants</h3>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #ddd' }}>
+                        <th style={{ textAlign: 'left', padding: '10px' }}>Size</th>
+                        <th style={{ textAlign: 'left', padding: '10px' }}>Color</th>
+                        <th style={{ textAlign: 'left', padding: '10px' }}>SKU</th>
+                        <th style={{ textAlign: 'right', padding: '10px' }}>Price</th>
+                        <th style={{ textAlign: 'right', padding: '10px' }}>Stock</th>
+                        <th style={{ textAlign: 'center', padding: '10px' }}>Quantity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {event.merchandise.variants.map((variant, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '10px' }}>{variant.size}</td>
+                          <td style={{ padding: '10px' }}>{variant.color}</td>
+                          <td style={{ padding: '10px' }}>{variant.sku}</td>
+                          <td style={{ textAlign: 'right', padding: '10px' }}>₹{variant.price}</td>
+                          <td style={{ textAlign: 'right', padding: '10px' }}>{variant.stockQty}</td>
+                          <td style={{ textAlign: 'center', padding: '10px' }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max={variant.stockQty}
+                              value={variantQuantities[idx] || 0}
+                              onChange={(e) => handleVariantQuantityChange(idx, e.target.value)}
+                              disabled={registering}
+                              style={{ width: '60px', padding: '5px' }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
+                    {(() => {
+                      const totalQty = Object.values(variantQuantities).reduce((sum, q) => sum + q, 0);
+                      const purchaseLimit = event.merchandise?.purchaseLimitPerParticipant || 1;
+                      const isExceeded = totalQty > purchaseLimit;
+                      
+                      return (
+                        <>
+                          <p style={{ margin: '0' }}>
+                            <strong>Total Items: </strong>
+                            {totalQty}
+                            {purchaseLimit && (
+                              <span style={{ marginLeft: '10px', color: isExceeded ? '#d32f2f' : '#666' }}>
+                                / {purchaseLimit} (limit)
+                              </span>
+                            )}
+                          </p>
+                          {isExceeded && (
+                            <p style={{ margin: '5px 0 0 0', color: '#d32f2f', fontSize: '0.9em' }}>
+                              ⚠️ Exceeds purchase limit
+                            </p>
+                          )}
+                          <p style={{ margin: '5px 0 0 0' }}>
+                            <strong>Estimated Total: </strong>
+                            ₹{event.merchandise.variants.reduce((sum, variant, idx) => 
+                              sum + (variant.price * (variantQuantities[idx] || 0)), 0
+                            )}
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 
@@ -358,7 +550,7 @@ export default function EventDetails() {
                   ? "Processing..."
                   : !canRegister
                   ? "Registration Closed"
-                  : event.type === "merchandise"
+                  : event.type === "merch"
                   ? "Purchase Now"
                   : "Register Now"}
               </button>

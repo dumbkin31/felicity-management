@@ -9,6 +9,8 @@ export default function ParticipantDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("normal");
+  const [uploadingPayment, setUploadingPayment] = useState({});
+  const [paymentProofs, setPaymentProofs] = useState({});
 
   useEffect(() => {
     fetchDashboard();
@@ -22,6 +24,46 @@ export default function ParticipantDashboard() {
       setError(err.response?.data?.error || "Failed to load dashboard");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadPaymentProof = async (registrationId, file) => {
+    if (!file) {
+      alert("Please select a file");
+      return;
+    }
+
+    try {
+      setUploadingPayment(prev => ({ ...prev, [registrationId]: true }));
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64String = reader.result;
+          const response = await api.post(
+            `/participants/registrations/${registrationId}/payment-proof`,
+            { paymentProof: base64String }
+          );
+
+          if (response.data.ok) {
+            alert("Payment proof uploaded successfully! Waiting for organizer approval...");
+            setPaymentProofs(prev => ({ ...prev, [registrationId]: null }));
+            fetchDashboard();
+          }
+        } catch (err) {
+          alert(err.response?.data?.error || "Failed to upload payment proof");
+        } finally {
+          setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
+        }
+      };
+      reader.onerror = () => {
+        alert("Failed to read file");
+        setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      alert("Error processing file");
+      setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
     }
   };
 
@@ -47,13 +89,68 @@ export default function ParticipantDashboard() {
     );
   }
 
-  const { upcoming, history } = dashboard;
+  const { pendingPayments, upcoming, history } = dashboard;
 
   return (
     <>
       <Navbar />
       <div className="dashboard-container">
         <h1>My Events Dashboard</h1>
+
+        {/* Pending Payments Section */}
+        {pendingPayments && pendingPayments.length > 0 && (
+          <section className="dashboard-section pending-payments-section">
+            <h2>⏳ Pending Payment Approvals ({pendingPayments.length})</h2>
+            <div className="pending-payments-grid">
+              {pendingPayments.map((event) => (
+                <div key={event._id} className="payment-card">
+                  <div className="payment-header">
+                    <h3>{event.eventName}</h3>
+                    <span className="status-badge pending">{event.status}</span>
+                  </div>
+                  <div className="payment-details">
+                    <p><strong>Organizer:</strong> {event.organizerName}</p>
+                    <p><strong>Event Type:</strong> {event.eventType === "merch" ? "Merchandise" : "Normal"}</p>
+                    {event.quantity && <p><strong>Quantity:</strong> {event.quantity}</p>}
+                    <p><strong>Payment Status:</strong> {event.paymentStatus === "pending" ? "Awaiting Proof Upload" : event.paymentStatus}</p>
+                  </div>
+
+                  {!event.paymentProof && event.paymentStatus === "pending" && (
+                    <div className="payment-proof-upload" style={{ marginTop: '15px', padding: '15px', backgroundColor: '#fff3cd', borderRadius: '5px' }}>
+                      <p style={{ margin: '0 0 10px 0' }}>📸 Upload payment proof to proceed:</p>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) => setPaymentProofs(prev => ({ ...prev, [event._id]: e.target.files?.[0] || null }))}
+                          disabled={uploadingPayment[event._id]}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          onClick={() => handleUploadPaymentProof(event._id, paymentProofs[event._id])}
+                          disabled={uploadingPayment[event._id] || !paymentProofs[event._id]}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: uploadingPayment[event._id] ? 'not-allowed' : 'pointer',
+                            opacity: uploadingPayment[event._id] || !paymentProofs[event._id] ? 0.6 : 1,
+                            fontWeight: 'bold',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {uploadingPayment[event._id] ? "Uploading..." : "Upload"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Upcoming Events Section */}
         <section className="dashboard-section">

@@ -377,17 +377,19 @@ router.get("/events/:id", async (req, res) => {
     const deadlinePassed = now > new Date(event.registrationDeadline);
     const limitReached = registrationCount >= event.registrationLimit;
     const stockExhausted = event.type === "merch" && event.merchandise?.stockQty <= 0;
+    const eventCompleted = event.status === "completed";
 
     return res.json({
       ok: true,
       event,
       registrationCount,
-      canRegister: !deadlinePassed && !limitReached && !stockExhausted && event.status === "published",
+      canRegister: !deadlinePassed && !limitReached && !stockExhausted && event.status === "published" && !eventCompleted,
       reasons: {
         deadlinePassed,
         limitReached,
         stockExhausted,
         notPublished: event.status !== "published",
+        eventCompleted,
       },
     });
   } catch (err) {
@@ -454,9 +456,9 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
     const { formData } = req.body;
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    // Generate QR code
-    const qrData = JSON.stringify({ ticketId, eventId: eventId.toString(), participantId: participantId.toString() });
-    const qrCodeDataUrl = await generateQRCode(qrData);
+    // Determine if payment is required
+    const requiresPayment = event.registrationFee > 0;
+    const registrationStatus = requiresPayment ? "pending_payment" : "confirmed";
 
     const registration = {
       ticketId,
@@ -466,38 +468,65 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
       eventType: event.type,
       participantName: `${participant.firstName} ${participant.lastName}`.trim(),
       participantEmail: participant.email,
-      status: "confirmed",
+      status: registrationStatus,
       formData: formData || {},
-      qrCode: qrCodeDataUrl,
+      qrCode: null, // Will be generated after payment approval if required
       createdAt: new Date(),
     };
+
+    if (requiresPayment) {
+      registration.paymentStatus = "pending";
+      registration.paymentProof = null;
+    }
 
     await registrationsCol().insertOne(registration);
 
     // Update event analytics
     await updateEventAnalytics(eventId);
 
-    // Send confirmation email
-    await sendTicketEmail({
-      to: participant.email,
-      participantName: registration.participantName,
-      eventName: event.name,
-      ticketId,
-      qrCodeDataUrl,
-      eventType: event.type,
-      eventDetails: {
-        startAt: event.startAt,
-        endAt: event.endAt,
-      },
-    });
+    // Send confirmation email only if payment is not required
+    if (!requiresPayment) {
+      // For free events, generate QR immediately
+      const qrData = JSON.stringify({ ticketId, eventId: eventId.toString(), participantId: participantId.toString() });
+      const qrCodeDataUrl = await generateQRCode(qrData);
+      
+      // Update registration with QR code
+      await registrationsCol().updateOne(
+        { ticketId },
+        { $set: { qrCode: qrCodeDataUrl } }
+      );
 
+      await sendTicketEmail({
+        to: participant.email,
+        participantName: registration.participantName,
+        eventName: event.name,
+        ticketId,
+        qrCodeDataUrl,
+        eventType: event.type,
+        eventDetails: {
+          startAt: event.startAt,
+          endAt: event.endAt,
+        },
+      });
+
+      return res.status(201).json({
+        ok: true,
+        registration: {
+          ticketId,
+          eventName: event.name,
+          status: registrationStatus,
+          qrCode: qrCodeDataUrl,
+        },
+      });
+    }
+
+    // For events requiring payment, return without ticketId or QR
     return res.status(201).json({
       ok: true,
       registration: {
-        ticketId,
         eventName: event.name,
-        status: "confirmed",
-        qrCode: qrCodeDataUrl,
+        status: registrationStatus,
+        qrCode: null,
       },
     });
   } catch (err) {
@@ -579,10 +608,6 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
     // Create purchase registration
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    // Generate QR code
-    const qrData = JSON.stringify({ ticketId, eventId: eventId.toString(), participantId: participantId.toString(), quantity: qty });
-    const qrCodeDataUrl = await generateQRCode(qrData);
-
     const registration = {
       ticketId,
       eventId: eventId.toString(),
@@ -591,10 +616,12 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       eventType: event.type,
       participantName: `${participant.firstName} ${participant.lastName}`.trim(),
       participantEmail: participant.email,
-      status: "confirmed",
+      status: "pending_payment",
+      paymentStatus: "pending",
+      paymentProof: null,
       variant: variant || {},
       quantity: qty,
-      qrCode: qrCodeDataUrl,
+      qrCode: null, // Will be generated after payment approval
       createdAt: new Date(),
     };
 
@@ -609,28 +636,15 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       { $inc: { "merchandise.stockQty": -qty } }
     );
 
-    // Send confirmation email
-    await sendTicketEmail({
-      to: participant.email,
-      participantName: registration.participantName,
-      eventName: event.name,
-      ticketId,
-      qrCodeDataUrl,
-      eventType: event.type,
-      eventDetails: {
-        quantity: qty,
-        variant,
-      },
-    });
+    // Note: Email will be sent after organizer approves payment
 
     return res.status(201).json({
       ok: true,
       registration: {
-        ticketId,
         eventName: event.name,
         quantity: qty,
-        status: "confirmed",
-        qrCode: qrCodeDataUrl,
+        status: "pending_payment",
+        qrCode: null,
       },
     });
   } catch (err) {
@@ -737,8 +751,8 @@ router.put("/events/:id", requireAuth, requireRole("organizer", "admin"), async 
     const allowedUpdates = {};
 
     if (event.status === "draft") {
-      // Draft: Can edit anything except status (use specific publish endpoint)
-      const { name, description, type, eligibility, registrationDeadline, startAt, endAt, registrationLimit, tags, registrationFee, formSchema, merchandise } = req.body;
+      // Draft: Can edit anything, and can change status to published
+      const { name, description, type, eligibility, registrationDeadline, startAt, endAt, registrationLimit, tags, registrationFee, formSchema, merchandise, status } = req.body;
       if (name) allowedUpdates.name = name.trim();
       if (description) allowedUpdates.description = description.trim();
       if (eligibility) allowedUpdates.eligibility = eligibility.trim();
@@ -750,9 +764,19 @@ router.put("/events/:id", requireAuth, requireRole("organizer", "admin"), async 
       if (registrationFee !== undefined) allowedUpdates.registrationFee = Number(registrationFee);
       if (formSchema) allowedUpdates.formSchema = formSchema;
       if (merchandise) allowedUpdates.merchandise = merchandise;
+      // Allow status change from draft to published only
+      if (status === "published") {
+        allowedUpdates.status = "published";
+      } else if (status && status !== "draft") {
+        return res.status(400).json({ ok: false, error: "Can only change status from draft to published" });
+      }
     } else if (event.status === "published") {
       // Published: Can update description, extend deadline, increase limit, close registrations
-      const { description, registrationDeadline, registrationLimit, registrationClosed } = req.body;
+      // Cannot change status back to draft
+      const { description, registrationDeadline, registrationLimit, registrationClosed, status } = req.body;
+      if (status && status !== "published") {
+        return res.status(400).json({ ok: false, error: "Cannot change published event back to draft" });
+      }
       if (description) allowedUpdates.description = description.trim();
       if (registrationDeadline) {
         const newDeadline = new Date(registrationDeadline);

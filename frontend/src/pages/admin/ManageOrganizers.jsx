@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import { PREDEFINED_INTERESTS } from "../../constants/interests";
 import "./ManageOrganizers.css";
 
 export default function ManageOrganizers() {
@@ -18,6 +19,8 @@ export default function ManageOrganizers() {
     contactNumber: "",
   });
   const [creatingOrganizer, setCreatingOrganizer] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState({ loginEmail: "", password: "" });
 
   useEffect(() => {
     fetchOrganizers();
@@ -65,10 +68,11 @@ export default function ManageOrganizers() {
       });
 
       if (response.data.ok) {
-        const generatedPassword = response.data.password;
-        alert(
-          `Organizer created successfully!\n\nLogin Email: ${response.data.loginEmail}\nPassword: ${generatedPassword}\n\nMake sure to share these credentials with the organizer.`
-        );
+        setGeneratedCredentials({
+          loginEmail: response.data.loginEmail,
+          password: response.data.password,
+        });
+        setShowCredentialsModal(true);
         setCreateForm({
           name: "",
           email: "",
@@ -351,13 +355,18 @@ export default function ManageOrganizers() {
 
                 <div className="form-group">
                   <label>Category</label>
-                  <input
-                    type="text"
+                  <select
                     name="category"
                     value={createForm.category}
                     onChange={handleCreateOrganizerChange}
-                    placeholder="e.g., Technology, Sports"
-                  />
+                  >
+                    <option value="">Select a category</option>
+                    {PREDEFINED_INTERESTS.map((interest) => (
+                      <option key={interest} value={interest}>
+                        {interest}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -399,6 +408,81 @@ export default function ManageOrganizers() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Credentials Modal */}
+        {showCredentialsModal && (
+          <div className="modal-overlay" onClick={() => setShowCredentialsModal(false)}>
+            <div className="modal-content credentials-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header success-header">
+                <h2>✅ Organizer Created Successfully</h2>
+                <button
+                  className="modal-close"
+                  onClick={() => setShowCredentialsModal(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="credentials-content">
+                <p className="credentials-info">
+                  Please share these login credentials with the organizer manually.
+                  <strong> Save them now - they won't be shown again!</strong>
+                </p>
+
+                <div className="credential-box">
+                  <label>Login Email</label>
+                  <div className="credential-value">
+                    <span>{generatedCredentials.loginEmail}</span>
+                    <button
+                      className="copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedCredentials.loginEmail);
+                        alert("Login email copied!");
+                      }}
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="credential-box">
+                  <label>Password</label>
+                  <div className="credential-value">
+                    <span className="password-text">{generatedCredentials.password}</span>
+                    <button
+                      className="copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedCredentials.password);
+                        alert("Password copied!");
+                      }}
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="credentials-actions">
+                  <button
+                    className="copy-all-btn"
+                    onClick={() => {
+                      const text = `Login Email: ${generatedCredentials.loginEmail}\nPassword: ${generatedCredentials.password}`;
+                      navigator.clipboard.writeText(text);
+                      alert("Credentials copied to clipboard!");
+                    }}
+                  >
+                    📋 Copy Both
+                  </button>
+                  <button
+                    className="done-btn"
+                    onClick={() => setShowCredentialsModal(false)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

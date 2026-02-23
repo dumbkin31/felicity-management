@@ -20,4 +20,25 @@ function registrationsCol() {
   return getDB().collection("registrations");
 }
 
-module.exports = { participantsCol, organizersCol, adminsCol, eventsCol, registrationsCol };
+function forumMessagesCol() {
+  return getDB().collection("forumMessages");
+}
+
+function passwordResetRequestsCol() {
+  return getDB().collection("passwordResetRequests");
+}
+
+function feedbackCol() {
+  return getDB().collection("feedback");
+}
+
+module.exports = { 
+  participantsCol, 
+  organizersCol, 
+  adminsCol, 
+  eventsCol, 
+  registrationsCol,
+  forumMessagesCol,
+  passwordResetRequestsCol,
+  feedbackCol
+};
