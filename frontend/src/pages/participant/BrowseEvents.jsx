@@ -33,7 +33,7 @@ export default function BrowseEvents() {
         api.get("/events/trending"),
         api.get("/organizers")
       ]);
-      setTrending(trendingRes.data.events || []);
+      setTrending(trendingRes.data.trending || []);
       setOrganizers(organizersRes.data.organizers || []);
     } catch (err) {
       console.error("Failed to fetch initial data:", err);
@@ -85,24 +85,6 @@ export default function BrowseEvents() {
       <div className="browse-container">
         <h1>Browse Events</h1>
 
-        {/* Trending Section */}
-        {trending.length > 0 && (
-          <section className="trending-section">
-            <h2>🔥 Trending Events</h2>
-            <div className="trending-grid">
-              {trending.map((event) => (
-                <Link to={`/events/${event._id}`} key={event._id} className="trending-card">
-                  <div className="trending-badge">#{trending.indexOf(event) + 1} Trending</div>
-                  <h3>{event.name}</h3>
-                  <p className="organizer">by {event.organizerId?.name || "Unknown"}</p>
-                  <p className="event-type">{event.type}</p>
-                  <p className="registrations">{event.registrationCount || 0} registrations</p>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* Filters Section */}
         <section className="filters-section">
           <h2>Search & Filters</h2>
@@ -127,21 +109,27 @@ export default function BrowseEvents() {
               <option value="all">All</option>
             </select>
 
-            <input
-              type="date"
-              placeholder="Start Date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="filter-input"
-            />
+            <div className="filter-group">
+              <label className="filter-label">Start Date</label>
+              <input
+                type="date"
+                placeholder="Start Date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="filter-input"
+              />
+            </div>
 
-            <input
-              type="date"
-              placeholder="End Date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="filter-input"
-            />
+            <div className="filter-group">
+              <label className="filter-label">End Date</label>
+              <input
+                type="date"
+                placeholder="End Date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="filter-input"
+              />
+            </div>
 
             <label className="checkbox-label">
               <input
@@ -155,6 +143,24 @@ export default function BrowseEvents() {
             <button onClick={resetFilters} className="reset-btn">Reset Filters</button>
           </div>
         </section>
+
+        {/* Trending Section */}
+        {trending.length > 0 && (
+          <section className="trending-section">
+            <h2>🔥 Trending Events</h2>
+            <div className="trending-grid">
+              {trending.map((event) => (
+                <Link to={`/events/${event._id}`} key={event._id} className="trending-card">
+                  <div className="trending-badge">#{trending.indexOf(event) + 1} Trending</div>
+                  <h3>{event.name}</h3>
+                  <p className="organizer">by {event.organizerId?.name || "Unknown"}</p>
+                  <p className="event-type">{event.type}</p>
+                  <p className="registrations">{event.registrationCount || 0} registrations</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Events Grid */}
         <section className="events-section">

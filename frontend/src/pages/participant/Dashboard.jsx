@@ -65,11 +65,17 @@ export default function ParticipantDashboard() {
           ) : (
             <div className="events-grid">
               {upcoming.map((event) => (
-                <div key={event.ticketId} className="event-card">
+                <Link to={`/events/${event.eventId}`} key={event.ticketId} className="event-card">
                   <div className="event-badge">{event.eventType}</div>
                   <h3>{event.eventName}</h3>
                   <p className="event-meta">
-                    <strong>Date:</strong> {new Date(event.startAt).toLocaleDateString()}
+                    <strong>Start:</strong> {new Date(event.startAt).toLocaleString()}
+                  </p>
+                  <p className="event-meta">
+                    <strong>Organizer:</strong> {event.organizerName || "Unknown Organizer"}
+                  </p>
+                  <p className="event-meta">
+                    <strong>End:</strong> {new Date(event.endAt).toLocaleString()}
                   </p>
                   <p className="event-meta">
                     <strong>Status:</strong> <span className="status-confirmed">{event.status}</span>
@@ -82,7 +88,7 @@ export default function ParticipantDashboard() {
                       <img src={event.qrCode} alt="QR Code" />
                     </div>
                   )}
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -127,16 +133,20 @@ export default function ParticipantDashboard() {
             ) : (
               <div className="history-list">
                 {history[activeTab].map((event) => (
-                  <div key={event.ticketId} className="history-item">
+                  <Link
+                    to={`/events/${event.eventId}`}
+                    key={event.ticketId}
+                    className="history-item"
+                  >
                     <div className="history-details">
                       <h4>{event.eventName}</h4>
-                      <p className="event-type-badge">{event.eventType}</p>
+                      <p><strong>Organizer:</strong> {event.organizerName || "Unknown Organizer"}</p>
                       <p><strong>Ticket:</strong> {event.ticketId}</p>
                       <p><strong>Status:</strong> <span className={`status-${event.status}`}>{event.status}</span></p>
                       {event.quantity && <p><strong>Quantity:</strong> {event.quantity}</p>}
                       <p className="event-date">{new Date(event.createdAt).toLocaleDateString()}</p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

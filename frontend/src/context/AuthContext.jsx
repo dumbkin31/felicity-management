@@ -7,29 +7,44 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize from localStorage on mount
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-    
-    if (token && savedUser) {
+    const initializeAuth = () => {
       try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
+        const token = localStorage.getItem("token");
+        const savedUser = localStorage.getItem("user");
+        
+        if (token && savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+        } else {
+          // Clear both if only one exists (corrupted state)
+          if (token || savedUser) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
   const login = async (email, password) => {
     const response = await api.post("/auth/login", { email, password });
     const { token, user } = response.data;
     
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-    setUser(user);
+    if (token && user) {
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      setUser(user);
+    }
     
     return user;
   };

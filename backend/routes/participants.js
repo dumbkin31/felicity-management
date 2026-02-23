@@ -1,8 +1,10 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
+const bcrypt = require("bcrypt");
 const { participantsCol, organizersCol, eventsCol, registrationsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
+const { autoMarkCompleted } = require("./events");
 
 const router = express.Router();
 
@@ -31,9 +33,32 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
       .find({ _id: { $in: eventIds } })
       .toArray();
 
+    // Get organizer details for events
+    const organizerIds = [...new Set(events.map((e) => toObjectId(e.organizerUserId)).filter(Boolean))];
+    const organizers = await organizersCol()
+      .find({ _id: { $in: organizerIds } }, { projection: { _id: 1, organizerName: 1 } })
+      .toArray();
+
+    const organizerMap = {};
+    organizers.forEach((o) => {
+      organizerMap[o._id.toString()] = o.organizerName;
+    });
+
     // Create event lookup map
     const eventMap = {};
     events.forEach((e) => {
+      eventMap[e._id.toString()] = e;
+    });
+
+    // Auto-mark events as completed if their end time has passed
+    await Promise.all(events.map((event) => autoMarkCompleted(event)));
+
+    // Refresh event map after auto-marking
+    const updatedEvents = await eventsCol()
+      .find({ _id: { $in: eventIds } })
+      .toArray();
+
+    updatedEvents.forEach((e) => {
       eventMap[e._id.toString()] = e;
     });
 
@@ -54,9 +79,11 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
 
       const record = {
         ticketId: reg.ticketId,
+        eventId: reg.eventId,
         eventName: reg.eventName,
         eventType: reg.eventType,
         organizerUserId: event.organizerUserId,
+        organizerName: organizerMap[event.organizerUserId] || "Unknown Organizer",
         status: reg.status,
         participantName: reg.participantName,
         quantity: reg.quantity,
@@ -162,13 +189,13 @@ router.put("/participants/me", requireAuth, requireRole("participant"), async (r
   }
 });
 
-// POST /api/participants/follow
-router.post("/participants/follow", requireAuth, requireRole("participant"), async (req, res) => {
+// POST /api/participants/follow/:organizerId
+router.post("/participants/follow/:organizerId", requireAuth, requireRole("participant"), async (req, res) => {
   try {
     const _id = toObjectId(req.user.sub);
     if (!_id) return res.status(400).json({ ok: false, error: "Invalid user id" });
 
-    const { organizerId } = req.body;
+    const { organizerId } = req.params;
     const orgId = toObjectId(organizerId);
     if (!orgId) return res.status(400).json({ ok: false, error: "Invalid organizerId" });
 
@@ -186,13 +213,13 @@ router.post("/participants/follow", requireAuth, requireRole("participant"), asy
   }
 });
 
-// POST /api/participants/unfollow
-router.post("/participants/unfollow", requireAuth, requireRole("participant"), async (req, res) => {
+// POST /api/participants/unfollow/:organizerId
+router.post("/participants/unfollow/:organizerId", requireAuth, requireRole("participant"), async (req, res) => {
   try {
     const _id = toObjectId(req.user.sub);
     if (!_id) return res.status(400).json({ ok: false, error: "Invalid user id" });
 
-    const { organizerId } = req.body;
+    const { organizerId } = req.params;
     const orgId = toObjectId(organizerId);
     if (!orgId) return res.status(400).json({ ok: false, error: "Invalid organizerId" });
 
@@ -202,6 +229,47 @@ router.post("/participants/unfollow", requireAuth, requireRole("participant"), a
     );
 
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// PUT /api/participants/change-password
+router.put("/participants/change-password", requireAuth, requireRole("participant"), async (req, res) => {
+  try {
+    const _id = toObjectId(req.user.sub);
+    if (!_id) return res.status(400).json({ ok: false, error: "Invalid user id" });
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ ok: false, error: "Current and new passwords are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ ok: false, error: "New password must be at least 6 characters" });
+    }
+
+    // Get participant with password hash
+    const participant = await participantsCol().findOne({ _id });
+    if (!participant) return res.status(404).json({ ok: false, error: "Participant not found" });
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, participant.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ ok: false, error: "Current password is incorrect" });
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await participantsCol().updateOne(
+      { _id },
+      { $set: { passwordHash: newPasswordHash } }
+    );
+
+    return res.json({ ok: true, message: "Password changed successfully" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

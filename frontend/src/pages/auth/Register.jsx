@@ -51,9 +51,18 @@ export default function Register() {
         isIIIT: formData.isIIIT,
       });
       
-      // Registration successful, redirect to login
-      alert("Registration successful! Please login.");
-      navigate("/login");
+      // Registration successful, redirect to onboarding
+      navigate("/onboarding", {
+        state: {
+          registrationData: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            password: formData.password,
+            isIIIT: formData.isIIIT,
+          },
+        },
+      });
     } catch (err) {
       setError(err.response?.data?.error || "Registration failed. Please try again.");
     } finally {
@@ -119,7 +128,7 @@ export default function Register() {
                 checked={formData.isIIIT}
                 onChange={handleChange}
               />
-              I am an IIIT student (must use IIIT email)
+              I am a IIIT student (must use IIIT email)
             </label>
           </div>
 

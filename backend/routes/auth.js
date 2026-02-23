@@ -83,7 +83,7 @@ router.post("/auth/login", async (req, res) => {
     let role = "participant";
 
     if (!user) {
-      user = await organizersCol().findOne({ contactEmail: e });
+      user = await organizersCol().findOne({ loginEmail: e });
       role = "organizer";
     }
 

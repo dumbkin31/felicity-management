@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import useFollowOrganizer from "../../hooks/useFollowOrganizer";
 import "./OrganizerDetail.css";
 
 export default function OrganizerDetail() {
@@ -26,7 +27,15 @@ export default function OrganizerDetail() {
         api.get("/participants/me"),
       ]);
       setOrganizer(organizerRes.data.organizer);
-      setEvents(eventsRes.data.events || []);
+      
+      // Handle events response - can be array or {upcoming, past}
+      let eventsList = [];
+      if (Array.isArray(eventsRes.data.events)) {
+        eventsList = eventsRes.data.events;
+      } else if (eventsRes.data.events?.upcoming && eventsRes.data.events?.past) {
+        eventsList = [...(eventsRes.data.events.upcoming || []), ...(eventsRes.data.events.past || [])];
+      }
+      setEvents(eventsList);
       setProfile(profileRes.data.participant);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to load organizer details");
@@ -35,29 +44,19 @@ export default function OrganizerDetail() {
     }
   };
 
-  const handleFollow = async () => {
-    try {
-      await api.post(`/participants/follow/${id}`);
-      const profileRes = await api.get("/participants/me");
-      setProfile(profileRes.data.participant);
-      setSuccess("Followed successfully!");
-      setTimeout(() => setSuccess(""), 2000);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to follow");
-    }
+  const refreshProfile = async () => {
+    const profileRes = await api.get("/participants/me");
+    setProfile(profileRes.data.participant);
   };
 
-  const handleUnfollow = async () => {
-    try {
-      await api.post(`/participants/unfollow/${id}`);
-      const profileRes = await api.get("/participants/me");
-      setProfile(profileRes.data.participant);
-      setSuccess("Unfollowed successfully!");
+  const { follow, unfollow } = useFollowOrganizer({
+    onProfileUpdated: refreshProfile,
+    onSuccess: (message) => {
+      setSuccess(message);
       setTimeout(() => setSuccess(""), 2000);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to unfollow");
-    }
-  };
+    },
+    onError: (message) => setError(message),
+  });
 
   const isFollowing = () => {
     if (!profile?.followedOrganizerIds) return false;
@@ -119,7 +118,7 @@ export default function OrganizerDetail() {
             </div>
             <div className="header-right">
               <button
-                onClick={isFollowing() ? handleUnfollow : handleFollow}
+                onClick={isFollowing() ? () => unfollow(id) : () => follow(id)}
                 className={isFollowing() ? "unfollow-btn-large" : "follow-btn-large"}
               >
                 {isFollowing() ? "✓ Following" : "+ Follow"}

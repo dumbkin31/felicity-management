@@ -1,8 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   if (!user) return null;
 
@@ -26,6 +32,7 @@ export default function Navbar() {
           {user.role === "organizer" && (
             <>
               <Link to="/organizer/dashboard" style={styles.link}>Dashboard</Link>
+              <Link to="/organizer/ongoing-events" style={styles.link}>Ongoing Events</Link>
               <Link to="/organizer/events/create" style={styles.link}>Create Event</Link>
               <Link to="/organizer/profile" style={styles.link}>Profile</Link>
             </>
@@ -34,10 +41,12 @@ export default function Navbar() {
           {user.role === "admin" && (
             <>
               <Link to="/admin/dashboard" style={styles.link}>Dashboard</Link>
+              <Link to="/admin/organizers" style={styles.link}>Manage Organizers</Link>
+              <Link to="/admin/password-reset-requests" style={styles.link}>Password Reset Requests</Link>
             </>
           )}
 
-          <button onClick={logout} style={styles.logoutBtn}>Logout</button>
+          <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </div>
     </nav>

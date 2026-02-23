@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 // Auth pages
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import Onboarding from "./pages/auth/Onboarding";
 
 // Participant pages
 import ParticipantDashboard from "./pages/participant/Dashboard";
@@ -18,13 +19,40 @@ import OrganizerDetail from "./pages/participant/OrganizerDetail";
 import OrganizerDashboard from "./pages/organizer/Dashboard";
 import OrganizerProfile from "./pages/organizer/Profile";
 import CreateEvent from "./pages/organizer/CreateEvent";
+import EditEvent from "./pages/organizer/EditEvent";
 import OrganizerEventDetails from "./pages/organizer/EventDetails";
+import OngoingEvents from "./pages/organizer/OngoingEvents";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
+import ManageOrganizers from "./pages/admin/ManageOrganizers";
 
 // Other
 import Unauthorized from "./pages/Unauthorized";
+
+// Root redirect component that checks auth status
+function RootRedirect() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to appropriate dashboard based on role
+  if (user.role === "participant") {
+    return <Navigate to="/dashboard" replace />;
+  } else if (user.role === "organizer") {
+    return <Navigate to="/organizer/dashboard" replace />;
+  } else if (user.role === "admin") {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to="/login" replace />;
+}
 
 export default function App() {
   return (
@@ -34,6 +62,7 @@ export default function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Participant routes */}
@@ -112,10 +141,26 @@ export default function App() {
             }
           />
           <Route
+            path="/organizer/events/:id/edit"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <EditEvent />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/organizer/events/:id"
             element={
               <ProtectedRoute roles={["organizer"]}>
                 <OrganizerEventDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/ongoing-events"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <OngoingEvents />
               </ProtectedRoute>
             }
           />
@@ -129,9 +174,17 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/organizers"
+            element={
+              <ProtectedRoute roles={["admin"]}>
+                <ManageOrganizers />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Default redirect based on role */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* Default route - redirects based on auth status and role */}
+          <Route path="/" element={<RootRedirect />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

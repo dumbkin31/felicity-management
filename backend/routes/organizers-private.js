@@ -3,6 +3,7 @@ const { ObjectId } = require("mongodb");
 const { organizersCol, eventsCol, registrationsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
+const { autoMarkCompleted } = require("./events");
 
 const router = express.Router();
 
@@ -20,42 +21,28 @@ router.get("/organizer/dashboard", requireAuth, requireRole("organizer"), async 
     const organizerId = req.user.sub;
 
     // Get all events created by this organizer
-    const events = await eventsCol()
+    let events = await eventsCol()
       .find({ organizerUserId: organizerId })
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Get analytics for completed events
-    const completedEvents = events.filter((e) => e.status === "completed");
+    // Auto-mark events as completed if their end time has passed
+    events = await Promise.all(events.map((event) => autoMarkCompleted(event)));
+
+    // Calculate dashboard statistics from event documents
     let totalRegistrations = 0;
     let totalRevenue = 0;
     let totalAttendance = 0;
+    let completedEventsCount = 0;
 
-    for (const event of completedEvents) {
-      const registrations = await registrationsCol()
-        .find({ eventId: event._id.toString(), status: "confirmed" })
-        .toArray();
-
-      const eventRegistrations = registrations.length;
-      totalRegistrations += eventRegistrations;
-
-      // Calculate revenue
-      if (event.type === "normal" && event.registrationFee) {
-        totalRevenue += eventRegistrations * event.registrationFee;
-      } else if (event.type === "merch" && event.merchandise?.variants?.length) {
-        // Sum up merchandise revenue
-        registrations.forEach((reg) => {
-          const variant = reg.variant;
-          const qty = reg.quantity || 1;
-          const price = variant?.price || 0;
-          totalRevenue += price * qty;
-        });
+    events.forEach((event) => {
+      if (event.status === "completed") {
+        completedEventsCount++;
+        totalRegistrations += event.totalRegistrations || 0;
+        totalRevenue += event.totalRevenue || 0;
+        totalAttendance += event.totalAttendance || 0;
       }
-
-      // Attendance (marked as attended)
-      const attended = registrations.filter((r) => r.attended === true).length;
-      totalAttendance += attended;
-    }
+    });
 
     // Event carousel data
     const eventsCarousel = events.map((e) => ({
@@ -67,6 +54,9 @@ router.get("/organizer/dashboard", requireAuth, requireRole("organizer"), async 
       endAt: e.endAt,
       registrationDeadline: e.registrationDeadline,
       tags: e.tags,
+      totalRegistrations: e.totalRegistrations || 0,
+      totalRevenue: e.totalRevenue || 0,
+      totalAttendance: e.totalAttendance || 0,
     }));
 
     return res.json({
@@ -75,7 +65,7 @@ router.get("/organizer/dashboard", requireAuth, requireRole("organizer"), async 
         eventsCarousel,
         analytics: {
           totalEvents: events.length,
-          completedEvents: completedEvents.length,
+          completedEvents: completedEventsCount,
           totalRegistrations,
           totalRevenue,
           totalAttendance,
@@ -96,36 +86,29 @@ router.get("/organizer/events/:id/details", requireAuth, requireRole("organizer"
     const organizerId = req.user.sub;
 
     // Get event and verify ownership
-    const event = await eventsCol().findOne({ _id: eventId });
+    let event = await eventsCol().findOne({ _id: eventId });
     if (!event) return res.status(404).json({ ok: false, error: "Event not found" });
+
+    // Auto-mark as completed if end time has passed
+    event = await autoMarkCompleted(event);
 
     if (event.organizerUserId !== organizerId) {
       return res.status(403).json({ ok: false, error: "Not authorized to view this event" });
     }
 
-    // Get all registrations for this event
+    // Get all registrations for this event (for participant list)
     const registrations = await registrationsCol()
       .find({ eventId: eventId.toString() })
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Calculate analytics
-    const totalRegistrations = registrations.length;
-    const confirmedRegistrations = registrations.filter((r) => r.status === "confirmed").length;
-    const attendance = registrations.filter((r) => r.attended === true).length;
-
-    let revenue = 0;
-    if (event.type === "normal" && event.registrationFee) {
-      revenue = confirmedRegistrations * event.registrationFee;
-    } else if (event.type === "merch") {
-      registrations.forEach((reg) => {
-        if (reg.status === "confirmed") {
-          const price = reg.variant?.price || 0;
-          const qty = reg.quantity || 1;
-          revenue += price * qty;
-        }
-      });
-    }
+    // Use pre-calculated analytics from event document
+    const analytics = {
+      totalRegistrations: event.totalRegistrations || 0,
+      confirmedRegistrations: event.confirmedRegistrations || 0,
+      attendance: event.totalAttendance || 0,
+      revenue: event.totalRevenue || 0,
+    };
 
     // Participant list
     const participants = registrations.map((r) => ({
@@ -155,12 +138,7 @@ router.get("/organizer/events/:id/details", requireAuth, requireRole("organizer"
         registrationFee: event.registrationFee,
         tags: event.tags,
       },
-      analytics: {
-        totalRegistrations,
-        confirmedRegistrations,
-        attendance,
-        revenue,
-      },
+      analytics,
       participants,
     });
   } catch (err) {

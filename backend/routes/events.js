@@ -16,6 +16,146 @@ function toObjectId(id) {
   }
 }
 
+// Helper: Auto-mark events as completed if endAt has passed
+async function autoMarkCompleted(event) {
+  try {
+    if (!event) return event;
+
+    // If event is published and end time has passed, mark as completed
+    if (event.status === "published" && new Date() > new Date(event.endAt)) {
+      await eventsCol().updateOne(
+        { _id: event._id },
+        { $set: { status: "completed", updatedAt: new Date() } }
+      );
+      // Return updated event
+      return await eventsCol().findOne({ _id: event._id });
+    }
+
+    return event;
+  } catch (err) {
+    console.error("Error auto-marking event as completed:", err);
+    return event;
+  }
+}
+
+// Helper: Calculate and store event analytics
+async function updateEventAnalytics(eventId) {
+  try {
+    const eventObjId = eventId instanceof ObjectId ? eventId : toObjectId(eventId);
+    if (!eventObjId) return;
+
+    const event = await eventsCol().findOne({ _id: eventObjId });
+    if (!event) return;
+
+    // Get all registrations for this event
+    const registrations = await registrationsCol()
+      .find({ eventId: eventObjId.toString() })
+      .toArray();
+
+    const confirmedRegistrations = registrations.filter((r) => r.status === "confirmed");
+    const attendedRegistrations = registrations.filter((r) => r.attended === true);
+
+    let totalRevenue = 0;
+    if (event.type === "normal" && event.registrationFee) {
+      totalRevenue = confirmedRegistrations.length * event.registrationFee;
+    } else if (event.type === "merch") {
+      confirmedRegistrations.forEach((reg) => {
+        const price = reg.variant?.price || 0;
+        const qty = reg.quantity || 1;
+        totalRevenue += price * qty;
+      });
+    }
+
+    // Update event with calculated analytics
+    const analytics = {
+      totalRegistrations: registrations.length,
+      confirmedRegistrations: confirmedRegistrations.length,
+      totalAttendance: attendedRegistrations.length,
+      totalRevenue: Math.round(totalRevenue * 100) / 100, // Round to 2 decimals
+      analyticsUpdatedAt: new Date(),
+    };
+
+    await eventsCol().updateOne(
+      { _id: eventObjId },
+      { $set: analytics }
+    );
+
+    return analytics;
+  } catch (err) {
+    console.error("Error updating event analytics:", err);
+  }
+}
+
+// Helper: Post event to Discord webhook
+async function postToDiscordWebhook(organizerId, event) {
+  try {
+    const organizer = await organizersCol().findOne({ _id: toObjectId(organizerId) });
+    if (!organizer || !organizer.discordWebhook) return;
+
+    const webhookUrl = organizer.discordWebhook;
+
+    const embed = {
+      title: `📅 New Event: ${event.name}`,
+      description: event.description,
+      color: 0x667eea,
+      fields: [
+        {
+          name: "Event Type",
+          value: event.type === "normal" ? "Registration" : "Merchandise",
+          inline: true,
+        },
+        {
+          name: "Eligibility",
+          value: event.eligibility || "All",
+          inline: true,
+        },
+        {
+          name: "Start Date",
+          value: new Date(event.startAt).toLocaleString(),
+          inline: true,
+        },
+        {
+          name: "End Date",
+          value: new Date(event.endAt).toLocaleString(),
+          inline: true,
+        },
+        {
+          name: "Registration Deadline",
+          value: new Date(event.registrationDeadline).toLocaleString(),
+          inline: true,
+        },
+        {
+          name: "Registration Limit",
+          value: String(event.registrationLimit),
+          inline: true,
+        },
+      ],
+      timestamp: new Date().toISOString(),
+    };
+
+    if (event.type === "normal" && event.registrationFee) {
+      embed.fields.push({
+        name: "Registration Fee",
+        value: `₹${event.registrationFee}`,
+        inline: true,
+      });
+    }
+
+    const payload = {
+      username: organizer.organizerName,
+      embeds: [embed],
+    };
+
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.error("Error posting to Discord webhook:", err);
+  }
+}
+
 // GET /api/events/trending - Top 5 events by registrations in last 24h
 router.get("/events/trending", async (req, res) => {
   try {
@@ -28,14 +168,34 @@ router.get("/events/trending", async (req, res) => {
         { $sort: { count: -1 } },
         { $limit: 5 },
         {
+          $addFields: {
+            eventObjectId: { $toObjectId: "$_id" }
+          }
+        },
+        {
           $lookup: {
             from: "events",
-            localField: "_id",
+            localField: "eventObjectId",
             foreignField: "_id",
             as: "event",
           },
         },
         { $unwind: "$event" },
+        { $match: { "event.status": "published" } },
+        {
+          $addFields: {
+            organizerObjectId: { $toObjectId: "$event.organizerUserId" }
+          }
+        },
+        {
+          $lookup: {
+            from: "organizers",
+            localField: "organizerObjectId",
+            foreignField: "_id",
+            as: "organizer",
+          },
+        },
+        { $unwind: { path: "$organizer", preserveNullAndEmptyArrays: true } },
         {
           $project: {
             _id: "$event._id",
@@ -50,6 +210,10 @@ router.get("/events/trending", async (req, res) => {
             tags: "$event.tags",
             status: "$event.status",
             organizerUserId: "$event.organizerUserId",
+            organizerId: {
+              _id: "$organizer._id",
+              name: "$organizer.organizerName"
+            },
             registrationCount: "$count",
           },
         },
@@ -74,7 +238,7 @@ router.get("/events", async (req, res) => {
       followedOnly,  // "true" - filter by followed organizers (requires auth)
     } = req.query;
 
-    let query = {};
+    let query = { status: "published" };
 
     // Search: partial match on event name or organizer name
     if (search) {
@@ -133,23 +297,44 @@ router.get("/events", async (req, res) => {
     }
 
     const events = await eventsCol()
-      .find(query, {
-        projection: {
-          name: 1,
-          description: 1,
-          type: 1,
-          eligibility: 1,
-          registrationDeadline: 1,
-          startAt: 1,
-          endAt: 1,
-          registrationLimit: 1,
-          tags: 1,
-          status: 1,
-          organizerUserId: 1,
+      .aggregate([
+        { $match: query },
+        { $sort: { startAt: 1 } },
+        { $limit: 100 },
+        {
+          $addFields: {
+            organizerObjectId: { $toObjectId: "$organizerUserId" }
+          }
         },
-      })
-      .sort({ startAt: 1 })
-      .limit(100)
+        {
+          $lookup: {
+            from: "organizers",
+            localField: "organizerObjectId",
+            foreignField: "_id",
+            as: "organizer"
+          }
+        },
+        { $unwind: { path: "$organizer", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            name: 1,
+            description: 1,
+            type: 1,
+            eligibility: 1,
+            registrationDeadline: 1,
+            startAt: 1,
+            endAt: 1,
+            registrationLimit: 1,
+            tags: 1,
+            status: 1,
+            organizerUserId: 1,
+            organizerId: {
+              _id: "$organizer._id",
+              name: "$organizer.organizerName"
+            }
+          }
+        }
+      ])
       .toArray();
 
     return res.json({ ok: true, events });
@@ -164,8 +349,25 @@ router.get("/events/:id", async (req, res) => {
     const eventId = toObjectId(req.params.id);
     if (!eventId) return res.status(400).json({ ok: false, error: "Invalid event id" });
 
-    const event = await eventsCol().findOne({ _id: eventId });
+    let event = await eventsCol().findOne({ _id: eventId });
     if (!event) return res.status(404).json({ ok: false, error: "Event not found" });
+
+    // Auto-mark as completed if end time has passed
+    event = await autoMarkCompleted(event);
+
+    // Get organizer details (convert string ID to ObjectId)
+    const organizerObjectId = toObjectId(event.organizerUserId);
+    const organizer = organizerObjectId ? await organizersCol().findOne(
+      { _id: organizerObjectId },
+      { projection: { _id: 1, organizerName: 1 } }
+    ) : null;
+
+    if (organizer) {
+      event.organizerId = {
+        _id: organizer._id,
+        name: organizer.organizerName
+      };
+    }
 
     // Get current registration count
     const registrationCount = await registrationsCol().countDocuments({ eventId: eventId.toString() });
@@ -271,6 +473,9 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
     };
 
     await registrationsCol().insertOne(registration);
+
+    // Update event analytics
+    await updateEventAnalytics(eventId);
 
     // Send confirmation email
     await sendTicketEmail({
@@ -395,6 +600,9 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
 
     await registrationsCol().insertOne(registration);
 
+    // Update event analytics
+    await updateEventAnalytics(eventId);
+
     // Decrement stock
     await eventsCol().updateOne(
       { _id: eventId },
@@ -443,6 +651,7 @@ router.post("/events", requireAuth, requireRole("organizer", "admin"), async (re
       endAt,
       registrationLimit,
       tags, // array of strings
+      status, // "draft" | "published"
 
       // normal-only
       registrationFee,
@@ -479,7 +688,7 @@ router.post("/events", requireAuth, requireRole("organizer", "admin"), async (re
       organizerUserId: req.user.sub,
 
       // Status + timestamps
-      status: "draft",
+      status: status === "published" ? "published" : "draft",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -497,7 +706,99 @@ router.post("/events", requireAuth, requireRole("organizer", "admin"), async (re
     }
 
     const result = await eventsCol().insertOne(doc);
+    
+    // If event is published, post to Discord webhook
+    if (status === "published") {
+      const eventWithId = { ...doc, _id: result.insertedId };
+      await postToDiscordWebhook(req.user.sub, eventWithId);
+    }
+    
     return res.status(201).json({ ok: true, eventId: result.insertedId });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// PUT /api/events/:id - Edit event (with status-based rules)
+router.put("/events/:id", requireAuth, requireRole("organizer", "admin"), async (req, res) => {
+  try {
+    const eventId = toObjectId(req.params.id);
+    if (!eventId) return res.status(400).json({ ok: false, error: "Invalid event id" });
+
+    const event = await eventsCol().findOne({ _id: eventId });
+    if (!event) return res.status(404).json({ ok: false, error: "Event not found" });
+
+    // Check ownership
+    if (event.organizerUserId !== req.user.sub && req.user.role !== "admin") {
+      return res.status(403).json({ ok: false, error: "Not authorized to edit this event" });
+    }
+
+    // Define allowed edits based on event status
+    const allowedUpdates = {};
+
+    if (event.status === "draft") {
+      // Draft: Can edit anything except status (use specific publish endpoint)
+      const { name, description, type, eligibility, registrationDeadline, startAt, endAt, registrationLimit, tags, registrationFee, formSchema, merchandise } = req.body;
+      if (name) allowedUpdates.name = name.trim();
+      if (description) allowedUpdates.description = description.trim();
+      if (eligibility) allowedUpdates.eligibility = eligibility.trim();
+      if (registrationDeadline) allowedUpdates.registrationDeadline = new Date(registrationDeadline);
+      if (startAt) allowedUpdates.startAt = new Date(startAt);
+      if (endAt) allowedUpdates.endAt = new Date(endAt);
+      if (registrationLimit) allowedUpdates.registrationLimit = Number(registrationLimit);
+      if (tags) allowedUpdates.tags = Array.isArray(tags) ? tags : [];
+      if (registrationFee !== undefined) allowedUpdates.registrationFee = Number(registrationFee);
+      if (formSchema) allowedUpdates.formSchema = formSchema;
+      if (merchandise) allowedUpdates.merchandise = merchandise;
+    } else if (event.status === "published") {
+      // Published: Can update description, extend deadline, increase limit, close registrations
+      const { description, registrationDeadline, registrationLimit, registrationClosed } = req.body;
+      if (description) allowedUpdates.description = description.trim();
+      if (registrationDeadline) {
+        const newDeadline = new Date(registrationDeadline);
+        const currentDeadline = new Date(event.registrationDeadline);
+        if (newDeadline >= currentDeadline) {
+          allowedUpdates.registrationDeadline = newDeadline;
+        } else {
+          return res.status(400).json({ ok: false, error: "Cannot reduce registration deadline" });
+        }
+      }
+      if (registrationLimit) {
+        const newLimit = Number(registrationLimit);
+        if (newLimit >= event.registrationLimit) {
+          allowedUpdates.registrationLimit = newLimit;
+        } else {
+          return res.status(400).json({ ok: false, error: "Cannot reduce registration limit" });
+        }
+      }
+      if (typeof registrationClosed === "boolean") {
+        allowedUpdates.registrationClosed = registrationClosed;
+      }
+    } else if (["ongoing", "completed", "closed"].includes(event.status)) {
+      // Ongoing/Completed/Closed: Only status changes allowed
+      const { status } = req.body;
+      if (status === "completed" || status === "closed") {
+        allowedUpdates.status = status;
+      } else {
+        return res.status(400).json({ ok: false, error: `Can only change status for ${event.status} events` });
+      }
+    } else {
+      return res.status(400).json({ ok: false, error: `Cannot edit event with status: ${event.status}` });
+    }
+
+    if (Object.keys(allowedUpdates).length === 0) {
+      return res.status(400).json({ ok: false, error: "No valid fields to update" });
+    }
+
+    allowedUpdates.updatedAt = new Date();
+
+    await eventsCol().updateOne(
+      { _id: eventId },
+      { $set: allowedUpdates }
+    );
+
+    const updatedEvent = await eventsCol().findOne({ _id: eventId });
+    return res.json({ ok: true, event: updatedEvent });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -506,3 +807,6 @@ router.post("/events", requireAuth, requireRole("organizer", "admin"), async (re
 
 
 module.exports = router;
+module.exports.updateEventAnalytics = updateEventAnalytics;
+module.exports.autoMarkCompleted = autoMarkCompleted;
+module.exports.postToDiscordWebhook = postToDiscordWebhook;

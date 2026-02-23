@@ -1,9 +1,10 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const { ObjectId } = require("mongodb");
-const { organizersCol } = require("../config/collections");
+const { organizersCol, participantsCol, eventsCol, registrationsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
+const { sendOrganizerCredentialsEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -25,22 +26,37 @@ router.get("/admin/dashboard", requireAuth, requireRole("admin"), async (req, re
         {
           projection: {
             organizerName: 1,
+            loginEmail: 1,
             category: 1,
             description: 1,
             contactEmail: 1,
             contactNumber: 1,
             createdAt: 1,
             createdByAdminId: 1,
+            isArchived: 1,
+            archivedAt: 1,
           },
         }
       )
       .sort({ createdAt: -1 })
       .toArray();
 
+    // Get total participants
+    const totalParticipants = await participantsCol().countDocuments();
+
+    // Get total events
+    const totalEvents = await eventsCol().countDocuments();
+
+    // Get total registrations
+    const totalRegistrations = await registrationsCol().countDocuments();
+
     return res.json({
       ok: true,
       dashboard: {
         totalOrganizers: organizers.length,
+        totalParticipants,
+        totalEvents,
+        totalRegistrations,
         organizers,
       },
     });
@@ -50,30 +66,42 @@ router.get("/admin/dashboard", requireAuth, requireRole("admin"), async (req, re
 });
 
 // POST /api/admin/organizers
-// Body: { name, email, password }
+// Body: { name, email, category, description, contactNumber }
+// Password is always auto-generated
 router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ ok: false, error: "name, email, password are required" });
+    if (!name || !email) {
+      return res.status(400).json({ ok: false, error: "name and email are required" });
     }
 
-    const e = email.toLowerCase().trim();
+    // Generate login email from organizer name: remove spaces, lowercase, add domain
+    const loginEmail = `${name.toLowerCase().replace(/\s+/g, ".")}@felicity.iiit`;
+    const contactEmail = email.toLowerCase().trim();
     const organizers = organizersCol();
 
-    const existing = await organizers.findOne({ email: e });
-    if (existing) {
-      return res.status(409).json({ ok: false, error: "Email already exists" });
+    // Check if login email already exists
+    const existingByLoginEmail = await organizers.findOne({ loginEmail });
+    if (existingByLoginEmail) {
+      return res.status(409).json({ ok: false, error: "Organizer with this name already exists" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    // Always auto-generate password
+    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    let autoPassword = "";
+    for (let i = 0; i < 12; i++) {
+      autoPassword += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+
+    const passwordHash = await bcrypt.hash(autoPassword, 12);
 
     const doc = {
       organizerName: name,
+      loginEmail: loginEmail,
+      contactEmail: contactEmail,
       category: req.body.category || "",
       description: req.body.description || "",
-      contactEmail: e,
       contactNumber: req.body.contactNumber || "",
       passwordHash,
       createdAt: new Date(),
@@ -81,7 +109,63 @@ router.post("/admin/organizers", requireAuth, requireRole("admin"), async (req, 
     };
 
     const result = await organizers.insertOne(doc);
-    return res.status(201).json({ ok: true, organizerId: result.insertedId });
+    
+    // Send credentials email to organizer's contact email
+    await sendOrganizerCredentialsEmail({
+      to: contactEmail,
+      organizerName: name,
+      loginEmail,
+      password: autoPassword,
+    });
+    
+    return res.status(201).json({ 
+      ok: true, 
+      organizerId: result.insertedId, 
+      loginEmail,
+      password: autoPassword 
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// PUT /api/admin/organizers/:id/archive - Archive organizer
+router.put("/admin/organizers/:id/archive", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const organizerId = toObjectId(req.params.id);
+    if (!organizerId) return res.status(400).json({ ok: false, error: "Invalid organizer id" });
+
+    const result = await organizersCol().updateOne(
+      { _id: organizerId },
+      { $set: { isArchived: true, archivedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ ok: false, error: "Organizer not found" });
+    }
+
+    return res.json({ ok: true, message: "Organizer archived successfully" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// PUT /api/admin/organizers/:id/restore - Restore organizer
+router.put("/admin/organizers/:id/restore", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const organizerId = toObjectId(req.params.id);
+    if (!organizerId) return res.status(400).json({ ok: false, error: "Invalid organizer id" });
+
+    const result = await organizersCol().updateOne(
+      { _id: organizerId },
+      { $set: { isArchived: false }, $unset: { archivedAt: "" } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ ok: false, error: "Organizer not found" });
+    }
+
+    return res.json({ ok: true, message: "Organizer restored successfully" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

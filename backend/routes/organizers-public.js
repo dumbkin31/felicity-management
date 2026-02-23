@@ -78,7 +78,7 @@ router.get("/organizers/:id/events", async (req, res) => {
     const now = new Date();
     const { filter } = req.query; // "upcoming" | "past" | undefined (all)
 
-    let query = { organizerUserId: organizerId };
+    let query = { organizerUserId: organizerId, status: { $ne: "draft" } };
 
     if (filter === "upcoming") {
       query.startAt = { $gte: now };

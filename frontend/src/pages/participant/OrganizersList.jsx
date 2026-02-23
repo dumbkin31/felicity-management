@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import useFollowOrganizer from "../../hooks/useFollowOrganizer";
 import "./OrganizersList.css";
 
 export default function OrganizersList() {
@@ -31,31 +32,19 @@ export default function OrganizersList() {
     }
   };
 
-  const handleFollow = async (organizerId) => {
-    try {
-      await api.post(`/participants/follow/${organizerId}`);
-      // Refresh profile to update followed list
-      const profileRes = await api.get("/participants/me");
-      setProfile(profileRes.data.participant);
-      setSuccess("Followed successfully!");
-      setTimeout(() => setSuccess(""), 2000);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to follow");
-    }
+  const refreshProfile = async () => {
+    const profileRes = await api.get("/participants/me");
+    setProfile(profileRes.data.participant);
   };
 
-  const handleUnfollow = async (organizerId) => {
-    try {
-      await api.post(`/participants/unfollow/${organizerId}`);
-      // Refresh profile to update followed list
-      const profileRes = await api.get("/participants/me");
-      setProfile(profileRes.data.participant);
-      setSuccess("Unfollowed successfully!");
+  const { follow, unfollow } = useFollowOrganizer({
+    onProfileUpdated: refreshProfile,
+    onSuccess: (message) => {
+      setSuccess(message);
       setTimeout(() => setSuccess(""), 2000);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to unfollow");
-    }
-  };
+    },
+    onError: (message) => setError(message),
+  });
 
   const isFollowing = (organizerId) => {
     if (!profile?.followedOrganizerIds) return false;
@@ -159,8 +148,8 @@ export default function OrganizersList() {
                     <button
                       onClick={() =>
                         isFollowing(org._id)
-                          ? handleUnfollow(org._id)
-                          : handleFollow(org._id)
+                          ? unfollow(org._id)
+                          : follow(org._id)
                       }
                       className={
                         isFollowing(org._id) ? "unfollow-btn" : "follow-btn"
