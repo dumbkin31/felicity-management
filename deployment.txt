@@ -7,14 +7,12 @@ ASSIGNMENT: DASS A1 (2024114007)
 FRONTEND DEPLOYMENT
 -------------------
 Hosting Platform: Vercel
-Frontend URL: https://your-frontend-url.vercel.app
-(Replace with actual Vercel deployment URL)
+Frontend URL: https://felicity-management-blush.vercel.app/
 
 BACKEND DEPLOYMENT
 ------------------
-Hosting Platform: Render (or Railway/Fly.io)
-Backend Base API URL: https://your-backend-url.onrender.com/api
-(Replace with actual backend deployment URL)
+Hosting Platform: Render
+Backend Base API URL: https://felicity-management-wm5y.onrender.com
 
 DATABASE
 --------
@@ -34,26 +32,3 @@ Backend (.env):
 - NODE_ENV: production
 - SMTP_HOST/PORT/USER/PASS: Email service credentials (optional)
 
-DEPLOYMENT CHECKLIST
---------------------
-✓ Frontend deployed to Vercel
-✓ Backend deployed to Render
-✓ MongoDB Atlas configured
-✓ Environment variables set on both platforms
-✓ CORS configured for frontend-backend communication
-✓ Frontend updated with backend API URL
-
-NOTES
------
-1. Ensure MongoDB Atlas IP whitelist includes deployment server IPs
-2. Test API endpoints from frontend after deployment
-3. Monitor logs on Render for any backend errors
-4. Update this file with actual deployment URLs before submission
-
-SUBMISSION REQUIREMENTS
------------------------
-This file should include:
-- Frontend URL (for evaluation)
-- Backend API URL (for evaluation)
-- Database connection details
-- Any additional deployment notes
