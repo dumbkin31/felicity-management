@@ -23,6 +23,7 @@ import EditEvent from "./pages/organizer/EditEvent";
 import OrganizerEventDetails from "./pages/organizer/EventDetails";
 import OngoingEvents from "./pages/organizer/OngoingEvents";
 import PaymentApprovals from "./pages/organizer/PaymentApprovals";
+import AttendanceTracker from "./pages/organizer/AttendanceTracker";
 import PasswordResetRequest from "./pages/organizer/PasswordResetRequest";
 
 // Admin pages
@@ -172,6 +173,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={["organizer"]}>
                 <PaymentApprovals />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:eventId/attendance"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <AttendanceTracker />
               </ProtectedRoute>
             }
           />

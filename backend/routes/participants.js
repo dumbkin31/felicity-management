@@ -111,7 +111,7 @@ router.get("/participants/dashboard", requireAuth, requireRole("participant"), a
       // History categorization
       if (new Date(event.endAt) < now && reg.status === "confirmed") {
         history.completed.push(record);
-      } else if (reg.status === "cancelled" || reg.status === "rejected") {
+      } else if (reg.status === "cancelled" || reg.status === "rejected" || reg.status === "payment_rejected") {
         history.cancelled.push(record);
       } else if (reg.eventType === "normal") {
         history.normal.push(record);

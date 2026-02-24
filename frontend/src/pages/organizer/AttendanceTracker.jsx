@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import axios from "axios";
+import api from "../../api/axios";
+import Navbar from "../../components/Navbar";
 import "./AttendanceTracker.css";
 
 const AttendanceTracker = () => {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const [attendanceData, setAttendanceData] = useState([]);
   const [stats, setStats] = useState({ total: 0, attended: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
@@ -40,12 +42,8 @@ const AttendanceTracker = () => {
 
   const fetchAttendance = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/attendance/${eventId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.get(
+        `/organizer/attendance/${eventId}`
       );
 
       if (response.data.ok) {
@@ -59,16 +57,34 @@ const AttendanceTracker = () => {
     }
   };
 
+  const parseTicketData = (decodedText) => {
+    try {
+      if (typeof decodedText === "string") {
+        return JSON.parse(decodedText);
+      }
+      return decodedText;
+    } catch (err) {
+      return null;
+    }
+  };
+
   const onScanSuccess = async (decodedText) => {
     setScanError("");
     setScanSuccess("");
 
-    try {
-      const ticketData = JSON.parse(decodedText);
-      await markAttendance(ticketData);
-    } catch (err) {
+    const ticketData = parseTicketData(decodedText);
+
+    if (!ticketData || !ticketData.ticketId || !ticketData.participantId) {
       setScanError("Invalid QR code format");
+      return;
     }
+
+    if (ticketData.eventId && ticketData.eventId !== eventId) {
+      setScanError("This QR code belongs to a different event");
+      return;
+    }
+
+    await markAttendance(ticketData);
   };
 
   const onScanError = (error) => {
@@ -77,16 +93,12 @@ const AttendanceTracker = () => {
 
   const markAttendance = async (ticketData, manual = false) => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/attendance/mark`,
+      const response = await api.post(
+        `/organizer/attendance/mark`,
         {
           ticketData,
           eventId,
           markedManually: manual,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
@@ -108,15 +120,11 @@ const AttendanceTracker = () => {
     }
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/attendance/manual`,
+      const response = await api.post(
+        `/organizer/attendance/manual`,
         {
           ticketId: manualTicketId.trim(),
           eventId,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
@@ -132,10 +140,24 @@ const AttendanceTracker = () => {
     }
   };
 
-  const handleExport = () => {
-    const token = localStorage.getItem("token");
-    const url = `${import.meta.env.VITE_API_BASE_URL}/organizer/attendance/export/${eventId}`;
-    window.open(`${url}?token=${token}`, "_blank");
+  const handleExport = async () => {
+    try {
+      const response = await api.get(
+        `/organizer/attendance/export/${eventId}`,
+        { responseType: "blob" }
+      );
+
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `attendance-${eventId}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setScanError(err.response?.data?.error || "Failed to export CSV");
+      setTimeout(() => setScanError(""), 3000);
+    }
   };
 
   const filteredData = attendanceData.filter((record) =>
@@ -146,8 +168,13 @@ const AttendanceTracker = () => {
   if (loading) return <div className="loading">Loading attendance data...</div>;
 
   return (
-    <div className="attendance-tracker">
-      <div className="header-section">
+    <>
+      <Navbar />
+      <div className="attendance-tracker">
+      <div className="header-section" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <button onClick={() => navigate(-1)} className="back-btn">
+          ← Back
+        </button>
         <h2>Attendance Tracker</h2>
         <button onClick={handleExport} className="export-btn">
           Export CSV
@@ -242,6 +269,7 @@ const AttendanceTracker = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

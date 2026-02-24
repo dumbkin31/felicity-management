@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api/axios";
+import Navbar from "../../components/Navbar";
 import "./PaymentApprovals.css";
 
 const PaymentApprovals = () => {
@@ -18,12 +19,8 @@ const PaymentApprovals = () => {
 
   const fetchPayments = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/payments/pending/${eventId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.get(
+        `/organizer/payments/pending/${eventId}`
       );
 
       if (response.data.ok) {
@@ -40,13 +37,9 @@ const PaymentApprovals = () => {
     if (!window.confirm("Are you sure you want to approve this payment?")) return;
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/payments/approve/${registrationId}`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.put(
+        `/organizer/payments/approve/${registrationId}`,
+        {}
       );
 
       if (response.data.ok) {
@@ -65,13 +58,9 @@ const PaymentApprovals = () => {
     }
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/payments/reject/${registrationId}`,
-        { reason: rejectionReason },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.put(
+        `/organizer/payments/reject/${registrationId}`,
+        { reason: rejectionReason }
       );
 
       if (response.data.ok) {
@@ -98,7 +87,9 @@ const PaymentApprovals = () => {
   if (loading) return <div className="loading">Loading payment approvals...</div>;
 
   return (
-    <div className="payment-approvals">
+    <>
+      <Navbar />
+      <div className="payment-approvals">
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
         <button 
           onClick={() => navigate(`/organizer/events/${eventId}`)}
@@ -214,6 +205,7 @@ const PaymentApprovals = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 

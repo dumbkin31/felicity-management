@@ -154,8 +154,17 @@ router.put("/organizer/payments/approve/:registrationId", requireAuth, requireRo
       }
     );
 
+    // Decrement stock for merchandise events
+    if (registration.eventType === "merch" && registration.quantity) {
+      const { eventsCol } = require("../config/collections");
+      const events = eventsCol();
+      await events.updateOne(
+        { _id: new ObjectId(registration.eventId) },
+        { $inc: { "merchandise.stockQty": -registration.quantity } }
+      );
+    }
+
     // TODO: Send confirmation email with QR code
-    // TODO: Decrement stock quantity
 
     return res.json({ 
       ok: true, 

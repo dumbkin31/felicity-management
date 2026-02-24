@@ -34,8 +34,8 @@ router.post("/organizer/attendance/mark", requireAuth, requireRole("organizer"),
     const registrations = registrationsCol();
     const registration = await registrations.findOne({
       ticketId,
-      eventId: new ObjectId(eventId),
-      participantId: new ObjectId(participantId),
+      eventId: eventId.toString(),
+      participantId: participantId.toString(),
       status: "confirmed",
     });
 
@@ -86,7 +86,7 @@ router.get("/organizer/attendance/:eventId", requireAuth, requireRole("organizer
     // Get all confirmed registrations for the event
     const allRegistrations = await registrations
       .find({
-        eventId: new ObjectId(eventId),
+        eventId: eventId.toString(),
         status: "confirmed",
       })
       .toArray();
@@ -133,7 +133,7 @@ router.post("/organizer/attendance/manual", requireAuth, requireRole("organizer"
     const registrations = registrationsCol();
     const registration = await registrations.findOne({
       ticketId,
-      eventId: new ObjectId(eventId),
+      eventId: eventId.toString(),
       status: "confirmed",
     });
 
@@ -180,13 +180,13 @@ router.get("/organizer/attendance/export/:eventId", requireAuth, requireRole("or
     // Get all registrations
     const allRegistrations = await registrations
       .find({
-        eventId: new ObjectId(eventId),
+        eventId: eventId.toString(),
         status: "confirmed",
       })
       .toArray();
 
     // Generate CSV
-    let csv = "Ticket ID,Participant Name,Email,Attended,Marked At,Marked Manually\n";
+    let csv = "\"Ticket ID\",\"Participant Name\",\"Email\",\"Attended\",\"Marked At\",\"Marked Manually\"\n";
     allRegistrations.forEach((reg) => {
       const attended = reg.attended ? "Yes" : "No";
       const markedAt = reg.attendanceMarkedAt

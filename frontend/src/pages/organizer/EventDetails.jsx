@@ -118,6 +118,13 @@ export default function EventRegistrations() {
         >
           💳 Payment Approvals
         </button>
+        <button 
+          className="edit-btn" 
+          onClick={() => navigate(`/organizer/events/${eventId}/attendance`)}
+          title="Mark Attendance"
+        >
+          ✅ Mark Attendance
+        </button>
       </div>
 
       {error && <div className="error-message">{error}</div>}

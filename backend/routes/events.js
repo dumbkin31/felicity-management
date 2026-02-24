@@ -479,7 +479,7 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
       registration.paymentProof = null;
     }
 
-    await registrationsCol().insertOne(registration);
+    const insertResult = await registrationsCol().insertOne(registration);
 
     // Update event analytics
     await updateEventAnalytics(eventId);
@@ -512,6 +512,7 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
       return res.status(201).json({
         ok: true,
         registration: {
+          _id: insertResult.insertedId,
           ticketId,
           eventName: event.name,
           status: registrationStatus,
@@ -524,6 +525,7 @@ router.post("/events/:id/register", requireAuth, requireRole("participant"), asy
     return res.status(201).json({
       ok: true,
       registration: {
+        _id: insertResult.insertedId,
         eventName: event.name,
         status: registrationStatus,
         qrCode: null,
@@ -625,22 +627,19 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       createdAt: new Date(),
     };
 
-    await registrationsCol().insertOne(registration);
+    const insertResult = await registrationsCol().insertOne(registration);
 
     // Update event analytics
     await updateEventAnalytics(eventId);
 
-    // Decrement stock
-    await eventsCol().updateOne(
-      { _id: eventId },
-      { $inc: { "merchandise.stockQty": -qty } }
-    );
+    // Note: Stock will be decremented only after payment approval
 
     // Note: Email will be sent after organizer approves payment
 
     return res.status(201).json({
       ok: true,
       registration: {
+        _id: insertResult.insertedId,
         eventName: event.name,
         quantity: qty,
         status: "pending_payment",

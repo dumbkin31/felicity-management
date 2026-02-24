@@ -13,6 +13,7 @@ export default function EventDetails() {
   const [registering, setRegistering] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [ticketData, setTicketData] = useState(null);
+  const [registrationId, setRegistrationId] = useState(null);
   const [existingRegistration, setExistingRegistration] = useState(null);
   const [canRegister, setCanRegister] = useState(true);
   const [blockingReasons, setBlockingReasons] = useState(null);
@@ -26,6 +27,8 @@ export default function EventDetails() {
   // For payment
   const [paymentProof, setPaymentProof] = useState(null);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentSuccess, setPaymentSuccess] = useState("");
 
   useEffect(() => {
     fetchEventDetails();
@@ -103,6 +106,7 @@ export default function EventDetails() {
 
         const response = await api.post(`/events/${id}/purchase`, { purchases });
         setTicketData(response.data.registration);
+        setRegistrationId(response.data.registration._id);
       } else {
         // Validate required fields
         const requiredFields = event.formSchema?.fields?.filter(f => f.required) || [];
@@ -116,6 +120,7 @@ export default function EventDetails() {
 
         const response = await api.post(`/events/${id}/register`, { formData });
         setTicketData(response.data.registration);
+        setRegistrationId(response.data.registration._id);
       }
 
       setRegistrationSuccess(true);
@@ -137,14 +142,16 @@ export default function EventDetails() {
     }));
   };
 
-  const handleUploadPaymentProof = async (ticketId) => {
-    if (!paymentProof) {
-      setError("Please select a payment proof file");
+  const handleUploadPaymentProof = async (registrationId, file) => {
+    if (!file) {
+      setPaymentError("Please select a payment proof file");
       return;
     }
 
     try {
       setUploadingProof(true);
+      setPaymentError("");
+      setPaymentSuccess("");
       
       // Convert file to base64
       const reader = new FileReader();
@@ -152,27 +159,27 @@ export default function EventDetails() {
         try {
           const base64String = reader.result;
           const response = await api.post(
-            `/participants/registrations/${ticketId}/payment-proof`,
+            `/participants/registrations/${registrationId}/payment-proof`,
             { paymentProof: base64String }
           );
 
           if (response.data.ok) {
-            alert("Payment proof uploaded successfully! Waiting for organizer approval...");
+            setPaymentSuccess("Payment proof uploaded successfully! Waiting for organizer approval...");
             setPaymentProof(null);
           }
         } catch (err) {
-          setError(err.response?.data?.error || "Failed to upload payment proof");
+          setPaymentError(err.response?.data?.error || "Failed to upload payment proof");
         } finally {
           setUploadingProof(false);
         }
       };
       reader.onerror = () => {
-        setError("Failed to read file");
+        setPaymentError("Failed to read file");
         setUploadingProof(false);
       };
-      reader.readAsDataURL(paymentProof);
+      reader.readAsDataURL(file);
     } catch (err) {
-      setError("Error processing file");
+      setPaymentError("Error processing file");
       setUploadingProof(false);
     }
   };
@@ -223,6 +230,9 @@ export default function EventDetails() {
                   <h3>⏳ Payment Required</h3>
                   <p>Please upload your payment proof to complete the registration.</p>
                   
+                  {paymentError && <div style={{ color: '#d32f2f', marginBottom: '10px', fontWeight: 'bold' }}>❌ {paymentError}</div>}
+                  {paymentSuccess && <div style={{ color: '#4caf50', marginBottom: '10px', fontWeight: 'bold' }}>✅ {paymentSuccess}</div>}
+                  
                   <div style={{ marginTop: '15px' }}>
                     <label htmlFor="payment-proof" style={{ display: 'block', marginBottom: '10px' }}>
                       <strong>Upload Payment Screenshot:</strong>
@@ -236,7 +246,7 @@ export default function EventDetails() {
                       style={{ marginBottom: '10px' }}
                     />
                     <button
-                      onClick={() => handleUploadPaymentProof(ticketData.ticketId)}
+                      onClick={() => handleUploadPaymentProof(ticketData._id, paymentProof)}
                       disabled={uploadingProof || !paymentProof}
                       style={{
                         padding: '10px 20px',
@@ -244,7 +254,8 @@ export default function EventDetails() {
                         color: 'white',
                         border: 'none',
                         borderRadius: '5px',
-                        cursor: 'pointer',
+                        cursor: uploadingProof || !paymentProof ? 'not-allowed' : 'pointer',
+                        opacity: uploadingProof || !paymentProof ? 0.6 : 1,
                         fontWeight: 'bold'
                       }}
                     >
