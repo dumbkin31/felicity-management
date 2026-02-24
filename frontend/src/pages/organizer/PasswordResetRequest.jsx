@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMessage } from "../../hooks/useMessage";
 import api from "../../api/axios";
 import "./PasswordResetRequest.css";
 
@@ -8,18 +9,14 @@ const PasswordResetRequest = () => {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [requests, setRequests] = useState([]);
   const [showStatus, setShowStatus] = useState(false);
-
+  const { success, error, successMsg, errorMsg } = useMessage();
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
 
     if (!email || !reason) {
-      setError("Please fill in all fields");
+      error("Please fill in all fields");
       return;
     }
 
@@ -32,12 +29,12 @@ const PasswordResetRequest = () => {
       );
 
       if (response.data.ok) {
-        setSuccess(response.data.message);
+        success(response.data.message);
         setEmail("");
         setReason("");
       }
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to submit request");
+      error(err.response?.data?.error || "Failed to submit request");
     } finally {
       setLoading(false);
     }
@@ -108,8 +105,8 @@ const PasswordResetRequest = () => {
                 />
               </div>
 
-              {error && <div className="error-message">{error}</div>}
-              {success && <div className="success-message">{success}</div>}
+              {errorMsg && <div className="error-message">{errorMsg}</div>}
+              {successMsg && <div className="success-message">{successMsg}</div>}
 
               <div className="form-buttons">
                 <button type="submit" disabled={loading} className="submit-btn">

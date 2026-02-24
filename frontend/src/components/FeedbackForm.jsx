@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useToast } from "../hooks/useToast";
 import api from "../api/axios";
 import "./FeedbackForm.css";
 
@@ -8,6 +9,7 @@ const FeedbackForm = ({ eventId, onSubmitSuccess }) => {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const { success } = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,7 +29,7 @@ const FeedbackForm = ({ eventId, onSubmitSuccess }) => {
       );
 
       if (response.data.ok) {
-        alert("Thank you for your feedback!");
+        success("Thank you for your feedback!");
         setRating(0);
         setComment("");
         if (onSubmitSuccess) onSubmitSuccess();

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
+import { useToast } from "../hooks/useToast";
+import { useConfirm } from "../hooks/useConfirm";
 import api from "../api/axios";
 import "./DiscussionForum.css";
 
@@ -14,6 +16,8 @@ const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
   const [newMessagesCount, setNewMessagesCount] = useState(0);
   const [postAsAnnouncement, setPostAsAnnouncement] = useState(false);
   const lastCountRef = useRef(0);
+  const { error: errorToast } = useToast();
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     fetchMessages();
@@ -51,7 +55,7 @@ const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
 
   const handlePostMessage = async () => {
     if (!newMessage.trim()) {
-      alert("Please enter a message");
+      errorToast("Please enter a message");
       return;
     }
 
@@ -72,7 +76,7 @@ const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
         fetchMessages();
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to post message");
+      errorToast(err.response?.data?.error || "Failed to post message");
     }
   };
 
@@ -96,12 +100,12 @@ const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
       );
       fetchMessages();
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to pin message");
+      errorToast(err.response?.data?.error || "Failed to pin message");
     }
   };
 
   const handleDelete = async (messageId) => {
-    if (!window.confirm("Are you sure you want to delete this message?")) return;
+    if (!confirm("Are you sure you want to delete this message?")) return;
 
     try {
       await api.delete(
@@ -109,7 +113,7 @@ const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
       );
       fetchMessages();
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to delete message");
+      errorToast(err.response?.data?.error || "Failed to delete message");
     }
   };
 

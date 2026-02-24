@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { StatCard } from "../../components/StatCard";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import "./Dashboard.css";
@@ -93,22 +94,10 @@ export default function OrganizerDashboard() {
 
         {/* Stats Cards */}
         <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-value">{stats.totalEvents}</div>
-            <div className="stat-label">Total Events</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.publishedEvents}</div>
-            <div className="stat-label">Published</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.draftEvents}</div>
-            <div className="stat-label">Drafts</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.completedEvents}</div>
-            <div className="stat-label">Completed</div>
-          </div>
+          <StatCard value={stats.totalEvents} label="Total Events" />
+          <StatCard value={stats.publishedEvents} label="Published" />
+          <StatCard value={stats.draftEvents} label="Drafts" />
+          <StatCard value={stats.completedEvents} label="Completed" />
         </div>
 
         {/* Analytics Cards for Completed Events */}
@@ -227,7 +216,7 @@ export default function OrganizerDashboard() {
                     <div className="event-analytics-details">
                       <div className="analytics-item">
                         <span className="label">Registrations:</span>
-                        <span className="value">{event.totalRegistrations || 0}</span>
+                        <span className="value">{event.confirmedRegistrations || 0}</span>
                       </div>
                       <div className="analytics-item">
                         <span className="label">Attendance:</span>
@@ -257,29 +246,6 @@ export default function OrganizerDashboard() {
             </div>
           </section>
         )}
-
-        {/* Club Info Section
-        <section className="club-info-section">
-          <h2>Club Information</h2>
-          <div className="club-info-box">
-            <p>
-              <strong>Name:</strong> {organizer?.organizerName || organizer?.name}
-            </p>
-            <p>
-              <strong>Email:</strong> {organizer?.contactEmail || organizer?.email}
-            </p>
-            <p>
-              <strong>Phone:</strong> {organizer?.contactNumber || "N/A"}
-            </p>
-            <p>
-              <strong>Description:</strong>{" "}
-              {organizer?.description || "No description"}
-            </p>
-          </div>
-          <Link to="/organizer/profile" className="edit-profile-link">
-            Edit Profile
-          </Link>
-        </section> */}
       </div>
     </>
   );

@@ -27,6 +27,10 @@ async function autoMarkCompleted(event) {
         { _id: event._id },
         { $set: { status: "completed", updatedAt: new Date() } }
       );
+      
+      // Update analytics when marking as completed
+      await updateEventAnalytics(event._id);
+      
       // Return updated event
       return await eventsCol().findOne({ _id: event._id });
     }
@@ -57,12 +61,29 @@ async function updateEventAnalytics(eventId) {
 
     let totalRevenue = 0;
     if (event.type === "normal" && event.registrationFee) {
+      // For normal events: count confirmed registrations × registration fee
       totalRevenue = confirmedRegistrations.length * event.registrationFee;
     } else if (event.type === "merch") {
+      // For merchandise events: sum up all purchased items
       confirmedRegistrations.forEach((reg) => {
-        const price = reg.variant?.price || 0;
-        const qty = reg.quantity || 1;
-        totalRevenue += price * qty;
+        if (reg.purchases && Array.isArray(reg.purchases)) {
+          // New format: multiple purchases with variant details
+          reg.purchases.forEach((purchase) => {
+            const price = purchase.price || 0;
+            const qty = purchase.quantity || 0;
+            totalRevenue += price * qty;
+          });
+        } else if (reg.variant) {
+          // Old format: single variant purchase (backwards compatibility)
+          const price = reg.variant.price || 0;
+          const qty = reg.quantity || 1;
+          totalRevenue += price * qty;
+        } else if (reg.quantity) {
+          // Fallback: if only quantity exists without variant info
+          const price = event.merchandise?.variants?.[0]?.price || 0;
+          const qty = reg.quantity || 1;
+          totalRevenue += price * qty;
+        }
       });
     }
 
@@ -595,19 +616,38 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       return res.status(403).json({ ok: false, error: "This event is only for non-IIIT participants" });
     }
 
-    // Get purchase details
-    const { variant, quantity } = req.body;
-    const qty = quantity || 1;
+    // Get purchase details - support both single and multiple purchases
+    const { purchases, variant, quantity } = req.body;
+    
+    let purchaseItems = [];
+    if (purchases && Array.isArray(purchases)) {
+      // New format: array of purchases
+      purchaseItems = purchases.filter(p => p.quantity > 0);
+    } else if (variant || quantity) {
+      // Old format: single variant purchase
+      purchaseItems = [{ variant: variant || {}, quantity: quantity || 1 }];
+    }
 
-    if (qty < 1 || qty > event.merchandise.purchaseLimitPerParticipant - existingPurchases) {
+    if (purchaseItems.length === 0) {
+      return res.status(400).json({ ok: false, error: "No items selected for purchase" });
+    }
+
+    // Calculate total quantity across all variants
+    const totalQty = purchaseItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+    if (totalQty < 1) {
       return res.status(400).json({ ok: false, error: "Invalid quantity" });
     }
 
-    if (event.merchandise.stockQty < qty) {
+    if (totalQty > event.merchandise.purchaseLimitPerParticipant - existingPurchases) {
+      return res.status(400).json({ ok: false, error: `Maximum ${event.merchandise.purchaseLimitPerParticipant} items per participant` });
+    }
+
+    if (event.merchandise.stockQty < totalQty) {
       return res.status(400).json({ ok: false, error: "Insufficient stock" });
     }
 
-    // Create purchase registration
+    // Create purchase registration with all variants
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     const registration = {
@@ -621,8 +661,8 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       status: "pending_payment",
       paymentStatus: "pending",
       paymentProof: null,
-      variant: variant || {},
-      quantity: qty,
+      purchases: purchaseItems, // Store all purchased variants
+      quantity: totalQty, // Total quantity for backwards compatibility
       qrCode: null, // Will be generated after payment approval
       createdAt: new Date(),
     };
@@ -641,7 +681,7 @@ router.post("/events/:id/purchase", requireAuth, requireRole("participant"), asy
       registration: {
         _id: insertResult.insertedId,
         eventName: event.name,
-        quantity: qty,
+        quantity: totalQty,
         status: "pending_payment",
         qrCode: null,
       },

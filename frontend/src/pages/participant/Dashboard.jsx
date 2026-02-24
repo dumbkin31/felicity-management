@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useToast } from "../../hooks/useToast";
+import { useFileUpload } from "../../hooks/useFileUpload";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import Toast from "../../components/Toast";
 import "./Dashboard.css";
 
 export default function ParticipantDashboard() {
@@ -11,6 +14,8 @@ export default function ParticipantDashboard() {
   const [activeTab, setActiveTab] = useState("normal");
   const [uploadingPayment, setUploadingPayment] = useState({});
   const [paymentProofs, setPaymentProofs] = useState({});
+  const { success, error: errorToast, toasts, removeToast } = useToast();
+  const { fileToBase64 } = useFileUpload();
 
   useEffect(() => {
     fetchDashboard();
@@ -29,40 +34,27 @@ export default function ParticipantDashboard() {
 
   const handleUploadPaymentProof = async (registrationId, file) => {
     if (!file) {
-      alert("Please select a file");
+      errorToast("Please select a file");
       return;
     }
 
     try {
       setUploadingPayment(prev => ({ ...prev, [registrationId]: true }));
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64String = reader.result;
-          const response = await api.post(
-            `/participants/registrations/${registrationId}/payment-proof`,
-            { paymentProof: base64String }
-          );
+      const base64String = await fileToBase64(file);
+      const response = await api.post(
+        `/participants/registrations/${registrationId}/payment-proof`,
+        { paymentProof: base64String }
+      );
 
-          if (response.data.ok) {
-            alert("Payment proof uploaded successfully! Waiting for organizer approval...");
-            setPaymentProofs(prev => ({ ...prev, [registrationId]: null }));
-            fetchDashboard();
-          }
-        } catch (err) {
-          alert(err.response?.data?.error || "Failed to upload payment proof");
-        } finally {
-          setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
-        }
-      };
-      reader.onerror = () => {
-        alert("Failed to read file");
-        setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
-      };
-      reader.readAsDataURL(file);
+      if (response.data.ok) {
+        success("Payment proof uploaded successfully! Waiting for organizer approval...");
+        setPaymentProofs(prev => ({ ...prev, [registrationId]: null }));
+        fetchDashboard();
+      }
     } catch (err) {
-      alert("Error processing file");
+      errorToast(err.response?.data?.error || "Failed to upload payment proof");
+    } finally {
       setUploadingPayment(prev => ({ ...prev, [registrationId]: false }));
     }
   };
@@ -94,6 +86,7 @@ export default function ParticipantDashboard() {
   return (
     <>
       <Navbar />
+      <Toast toasts={toasts} removeToast={removeToast} />
       <div className="dashboard-container">
         <h1>My Events Dashboard</h1>
 

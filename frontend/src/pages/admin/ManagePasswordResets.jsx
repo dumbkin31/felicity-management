@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
+import { useConfirm } from "../../hooks/useConfirm";
+import { useToast } from "../../hooks/useToast";
+import { useClipboard } from "../../hooks/useClipboard";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import Toast from "../../components/Toast";
 import "./ManagePasswordResets.css";
 
 const ManagePasswordResets = () => {
@@ -10,6 +14,9 @@ const ManagePasswordResets = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [generatedPassword, setGeneratedPassword] = useState(null);
+  const { confirm } = useConfirm();
+  const { success, error: errorToast, toasts, removeToast } = useToast();
+  const { copyToClipboard } = useClipboard();
 
   useEffect(() => {
     fetchRequests();
@@ -30,7 +37,7 @@ const ManagePasswordResets = () => {
   };
 
   const handleApprove = async (requestId) => {
-    if (!window.confirm("Are you sure you want to approve this password reset request?")) {
+    if (!confirm("Are you sure you want to approve this password reset request?")) {
       return;
     }
 
@@ -48,13 +55,13 @@ const ManagePasswordResets = () => {
         fetchRequests();
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to approve request");
+      errorToast(err.response?.data?.error || "Failed to approve request");
     }
   };
 
   const handleReject = async () => {
     if (!rejectionReason.trim()) {
-      alert("Please provide a reason for rejection");
+      errorToast("Please provide a reason for rejection");
       return;
     }
 
@@ -65,19 +72,21 @@ const ManagePasswordResets = () => {
       );
 
       if (response.data.ok) {
-        alert("Request rejected successfully");
+        success("Request rejected successfully");
         setSelectedRequest(null);
         setRejectionReason("");
         fetchRequests();
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to reject request");
+      errorToast(err.response?.data?.error || "Failed to reject request");
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+  const handleCopy = async (text) => {
+    const copied = await copyToClipboard(text);
+    if (copied) {
+      success("Copied to clipboard!");
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -95,6 +104,7 @@ const ManagePasswordResets = () => {
   return (
     <>
       <Navbar />
+      <Toast toasts={toasts} removeToast={removeToast} />
       <div className="manage-password-resets">
       <h2>Manage Password Reset Requests</h2>
 
@@ -195,7 +205,7 @@ const ManagePasswordResets = () => {
                 <strong>Email:</strong>
                 <div className="credential-value">
                   <span>{generatedPassword.email}</span>
-                  <button onClick={() => copyToClipboard(generatedPassword.email)}>
+                  <button onClick={() => handleCopy(generatedPassword.email)}>
                     Copy
                   </button>
                 </div>
@@ -205,7 +215,7 @@ const ManagePasswordResets = () => {
                 <strong>New Password:</strong>
                 <div className="credential-value">
                   <span>{generatedPassword.password}</span>
-                  <button onClick={() => copyToClipboard(generatedPassword.password)}>
+                  <button onClick={() => handleCopy(generatedPassword.password)}>
                     Copy
                   </button>
                 </div>
@@ -214,7 +224,7 @@ const ManagePasswordResets = () => {
               <div className="copy-both">
                 <button
                   onClick={() =>
-                    copyToClipboard(
+                    handleCopy(
                       `Email: ${generatedPassword.email}\nPassword: ${generatedPassword.password}`
                     )
                   }

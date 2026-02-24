@@ -1,3 +1,5 @@
+@import "../../styles/globals.css";
+
 .profile-container {
   width: 100%;
   min-height: 100vh;
@@ -11,30 +13,6 @@
   font-size: 32px;
   color: #333;
   margin-bottom: 30px;
-}
-
-.loading {
-  text-align: center;
-  padding: 40px;
-  font-size: 18px;
-}
-
-.error {
-  background: #ffe6e6;
-  border: 1px solid #ff9999;
-  color: #c33;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.success {
-  background: #e6ffe6;
-  border: 1px solid #99ff99;
-  color: #2d7a2d;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
 }
 
 /* Profile Section */
@@ -134,42 +112,6 @@
 }
 
 .form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #555;
-}
-
-.form-group input,
-.form-group textarea {
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 15px;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.form-group input:disabled {
   background: #f0f0f0;
   cursor: not-allowed;
 }

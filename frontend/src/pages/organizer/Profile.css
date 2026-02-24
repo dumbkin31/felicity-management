@@ -1,3 +1,5 @@
+@import "../../styles/globals.css";
+
 .org-profile-container {
   width: 100%;
   min-height: 100vh;
@@ -11,30 +13,6 @@
   font-size: 32px;
   color: #333;
   margin-bottom: 30px;
-}
-
-.loading {
-  text-align: center;
-  padding: 40px;
-  font-size: 18px;
-}
-
-.error {
-  background: #ffe6e6;
-  border: 1px solid #ff9999;
-  color: #c33;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.success {
-  background: #e6ffe6;
-  border: 1px solid #99ff99;
-  color: #2d7a2d;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
 }
 
 .profile-section {

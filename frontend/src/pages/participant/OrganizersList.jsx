@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useMessage } from "../../hooks/useMessage";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import useFollowOrganizer from "../../hooks/useFollowOrganizer";
@@ -9,9 +10,8 @@ export default function OrganizersList() {
   const [organizers, setOrganizers] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
+  const { success, error, successMsg, errorMsg } = useMessage();
 
   useEffect(() => {
     fetchData();
@@ -39,11 +39,8 @@ export default function OrganizersList() {
 
   const { follow, unfollow } = useFollowOrganizer({
     onProfileUpdated: refreshProfile,
-    onSuccess: (message) => {
-      setSuccess(message);
-      setTimeout(() => setSuccess(""), 2000);
-    },
-    onError: (message) => setError(message),
+    onSuccess: success,
+    onError: error,
   });
 
   const isFollowing = (organizerId) => {
@@ -84,8 +81,8 @@ export default function OrganizersList() {
           <p className="subtitle">Discover and follow clubs to stay updated on their events</p>
         </div>
 
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
+        {errorMsg && <div className="error">{errorMsg}</div>}
+        {successMsg && <div className="success">{successMsg}</div>}
 
         {/* Search Bar */}
         <div className="search-section">

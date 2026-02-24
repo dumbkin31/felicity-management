@@ -164,6 +164,10 @@ router.put("/organizer/payments/approve/:registrationId", requireAuth, requireRo
       );
     }
 
+    // Update event analytics (including totalRevenue)
+    const { updateEventAnalytics } = require("./events");
+    await updateEventAnalytics(registration.eventId);
+
     // Get event details for email
     const events = eventsCol();
     const event = await events.findOne({ _id: new ObjectId(registration.eventId) });

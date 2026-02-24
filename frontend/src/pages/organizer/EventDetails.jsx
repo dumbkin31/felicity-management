@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useSearch } from "../../hooks/useSearch";
+import { useToast } from "../../hooks/useToast";
 import api from "../../api/axios";
 import DiscussionForum from "../../components/DiscussionForum";
 import "./EventDetails.css";
@@ -12,10 +14,13 @@ export default function EventRegistrations() {
   const [eventData, setEventData] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-
-  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [attendedFilter, setAttendedFilter] = useState("all");
+  const { error: errorToast } = useToast();
+  const { searchQuery, setSearchQuery, filteredItems } = useSearch(
+    participants,
+    ["participantName", "participantEmail", "ticketId"]
+  );
 
   useEffect(() => {
     fetchEventDetails();
@@ -43,15 +48,15 @@ export default function EventRegistrations() {
     try {
       // Note: This assumes there's an endpoint to update attendance
       // If not implemented yet, this can be added to backend
-      alert("Attendance update will be implemented in next phase");
+      errorToast("Attendance update will be implemented in next phase");
     } catch (err) {
       setError(err.response?.data?.error || "Error updating attendance");
     }
   };
 
   const handleExportCSV = () => {
-    const headers = ["Ticket ID", "Name", "Email", "Registration Date", "Status", "Attended"];
-    const rows = filteredParticipants.map((p) => [
+    const headers = ["\"Ticket ID\"", "Name", "Email", "\"Registration Date\"", "Status", "Attended"];
+    const rows = filteredByStatus.map((p) => [
       p.ticketId,
       p.participantName,
       p.participantEmail,
@@ -74,16 +79,11 @@ export default function EventRegistrations() {
   };
 
   // Filtered participants
-  const filteredParticipants = participants.filter((p) => {
-    const matchesSearch =
-      p.participantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.participantEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.ticketId.toLowerCase().includes(searchTerm.toLowerCase());
-
+  const filteredByStatus = filteredItems.filter((p) => {
     const matchesStatus = statusFilter === "all" || p.status === statusFilter;
     const matchesAttended = attendedFilter === "all" || (attendedFilter === "yes" ? p.attended : !p.attended);
 
-    return matchesSearch && matchesStatus && matchesAttended;
+    return matchesStatus && matchesAttended;
   });
 
   if (loading) {
@@ -221,8 +221,8 @@ export default function EventRegistrations() {
           <input
             type="text"
             placeholder="Search by name, email, or ticket ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
           />
         </div>
@@ -251,9 +251,9 @@ export default function EventRegistrations() {
 
       {/* Participants Table */}
       <section className="participants-section">
-        <h2>Registrations ({filteredParticipants.length})</h2>
+        <h2>Registrations ({filteredByStatus.length})</h2>
 
-        {filteredParticipants.length === 0 ? (
+        {filteredByStatus.length === 0 ? (
           <div className="empty-state">
             <p>No registrations match the current filters.</p>
           </div>
@@ -272,7 +272,7 @@ export default function EventRegistrations() {
                 </tr>
               </thead>
               <tbody>
-                {filteredParticipants.map((participant, idx) => (
+                {filteredByStatus.map((participant, idx) => (
                   <tr key={idx}>
                     <td>
                       <code className="ticket-id">{participant.ticketId}</code>

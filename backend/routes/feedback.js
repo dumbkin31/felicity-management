@@ -160,7 +160,7 @@ router.get("/organizer/feedback/:eventId/export", requireAuth, requireRole("orga
       .toArray();
 
     // Generate CSV
-    let csv = "Rating,Comment,Submitted At\n";
+    let csv = "Rating,Comment,\"Submitted At\"\n";
     allFeedback.forEach((fb) => {
       const comment = fb.comment ? `"${fb.comment.replace(/"/g, '""')}"` : "";
       const submittedAt = new Date(fb.submittedAt).toLocaleString();

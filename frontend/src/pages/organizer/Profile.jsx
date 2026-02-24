@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useMessage } from "../../hooks/useMessage";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import "./Profile.css";
@@ -8,8 +9,7 @@ export default function OrganizerProfile() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const { success, error, successMsg, errorMsg } = useMessage();
 
   // Form fields
   const [organizerName, setOrganizerName] = useState("");
@@ -37,7 +37,7 @@ export default function OrganizerProfile() {
       setCategory(data.category || "");
       setDiscordWebhook(data.discordWebhook || "");
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to load profile");
+      error(err.response?.data?.error || "Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -46,8 +46,6 @@ export default function OrganizerProfile() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
-    setSuccess("");
 
     try {
       const updates = {
@@ -60,13 +58,13 @@ export default function OrganizerProfile() {
       };
 
       await api.put("/organizer/profile", updates);
-      setSuccess("Profile updated successfully!");
+      success("Profile updated successfully!");
       setEditing(false);
 
       // Refresh profile
       await fetchProfile();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to update profile");
+      error(err.response?.data?.error || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -89,8 +87,8 @@ export default function OrganizerProfile() {
       <div className="org-profile-container">
         <h1>Club Profile</h1>
 
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
+        {errorMsg && <div className="error">{errorMsg}</div>}
+        {successMsg && <div className="success">{successMsg}</div>}
 
         <section className="profile-section">
           <div className="section-header">

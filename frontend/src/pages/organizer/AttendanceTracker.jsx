@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import { useCSVExport } from "../../hooks/useCSVExport";
+import { useSearch } from "../../hooks/useSearch";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import "./AttendanceTracker.css";
@@ -15,11 +17,30 @@ const AttendanceTracker = () => {
   const [scanError, setScanError] = useState("");
   const [scanSuccess, setScanSuccess] = useState("");
   const [manualTicketId, setManualTicketId] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { searchQuery, setSearchQuery, filteredItems } = useSearch(
+    attendanceData,
+    ["ticketId", "participantName", "participantEmail"]
+  );
 
   useEffect(() => {
     fetchAttendance();
   }, [eventId]);
+
+  const fetchAttendance = async () => {
+    try {
+      const response = await api.get(`/organizer/attendance/${eventId}`);
+      if (response.data.ok) {
+        setAttendanceData(response.data.attendance);
+        setStats(response.data.stats);
+      }
+    } catch (err) {
+      console.error("Failed to fetch attendance:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { exportCSV } = useCSVExport();
 
   useEffect(() => {
     let scanner;
@@ -39,23 +60,6 @@ const AttendanceTracker = () => {
       }
     };
   }, [scannerActive]);
-
-  const fetchAttendance = async () => {
-    try {
-      const response = await api.get(
-        `/organizer/attendance/${eventId}`
-      );
-
-      if (response.data.ok) {
-        setAttendanceData(response.data.attendance);
-        setStats(response.data.stats);
-      }
-    } catch (err) {
-      console.error("Failed to fetch attendance:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const parseTicketData = (decodedText) => {
     try {
@@ -140,31 +144,9 @@ const AttendanceTracker = () => {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const response = await api.get(
-        `/organizer/attendance/export/${eventId}`,
-        { responseType: "blob" }
-      );
-
-      const blob = new Blob([response.data], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `attendance-${eventId}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setScanError(err.response?.data?.error || "Failed to export CSV");
-      setTimeout(() => setScanError(""), 3000);
-    }
+  const handleExport = () => {
+    exportCSV(`/organizer/attendance/export/${eventId}`, `attendance-${eventId}.csv`);
   };
-
-  const filteredData = attendanceData.filter((record) =>
-    record.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    record.ticketId.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   if (loading) return <div className="loading">Loading attendance data...</div>;
 
   return (
@@ -247,7 +229,7 @@ const AttendanceTracker = () => {
             <div>Marked At</div>
             <div>Manual</div>
           </div>
-          {filteredData.map((record) => (
+          {filteredItems.map((record) => (
             <div key={record.ticketId} className="table-row">
               <div>{record.ticketId}</div>
               <div>{record.participantName}</div>

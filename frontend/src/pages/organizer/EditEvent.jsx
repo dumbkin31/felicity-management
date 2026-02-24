@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useToast } from "../../hooks/useToast";
+import { useConfirm } from "../../hooks/useConfirm";
 import api from "../../api/axios";
+import Toast from "../../components/Toast";
 import { PREDEFINED_INTERESTS } from "../../constants/interests";
 import "./CreateEvent.css";
 
@@ -12,6 +15,8 @@ export default function EditEvent() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [event, setEvent] = useState(null);
+  const { success, error: errorToast, toasts, removeToast } = useToast();
+  const { confirm } = useConfirm();
 
   // Form state
   const [eventType, setEventType] = useState("normal");
@@ -23,6 +28,9 @@ export default function EditEvent() {
   const [endAt, setEndAt] = useState("");
   const [registrationLimit, setRegistrationLimit] = useState("");
   const [originalLimit, setOriginalLimit] = useState("");
+  const [originalRegistrationDeadline, setOriginalRegistrationDeadline] = useState("");
+  const [originalStartAt, setOriginalStartAt] = useState("");
+  const [originalEndAt, setOriginalEndAt] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
 
   // Normal event fields
@@ -41,13 +49,6 @@ export default function EditEvent() {
         if (response.data.ok) {
           const eventData = response.data.event;
           
-          // Check if event can be edited
-          if (["ongoing", "completed", "closed"].includes(eventData.status)) {
-            alert(`Cannot edit ${eventData.status} events. Only draft and published events can be edited.`);
-            navigate(`/organizer/events/${eventId}`);
-            return;
-          }
-          
           setEvent(eventData);
           setEventType(eventData.type || "normal");
           setName(eventData.name);
@@ -58,6 +59,9 @@ export default function EditEvent() {
           setEndAt(formatDateTimeLocal(eventData.endAt));
           setRegistrationLimit(eventData.registrationLimit);
           setOriginalLimit(eventData.registrationLimit);
+          setOriginalRegistrationDeadline(formatDateTimeLocal(eventData.registrationDeadline));
+          setOriginalStartAt(formatDateTimeLocal(eventData.startAt));
+          setOriginalEndAt(formatDateTimeLocal(eventData.endAt));
           setSelectedTags(eventData.tags || []);
           
           if (eventData.type === "normal") {
@@ -137,8 +141,81 @@ export default function EditEvent() {
     setSelectedTags(updatedTags);
   };
 
+  // Handle variant changes
+  const handleAddVariant = () => {
+    setVariants([...variants, { size: "", color: "", sku: "", price: 0, stockQty: 0 }]);
+  };
+
+  const handleRemoveVariant = (index) => {
+    const updatedVariants = variants.filter((_, idx) => idx !== index);
+    setVariants(updatedVariants);
+    // Recalculate total stock
+    setStockQty(calculateTotalStock(updatedVariants).toString());
+  };
+
+  const handleVariantChange = (index, field, value) => {
+    const updatedVariants = [...variants];
+    updatedVariants[index] = { 
+      ...updatedVariants[index], 
+      [field]: field === "price" || field === "stockQty" ? Number(value) : value 
+    };
+    setVariants(updatedVariants);
+    // Recalculate total stock if stock quantity changed
+    if (field === "stockQty") {
+      setStockQty(calculateTotalStock(updatedVariants).toString());
+    }
+  };
+
+  const handleCloseRegistrations = async () => {
+    if (!confirm("Are you sure you want to close registrations? This will prevent new registrations.")) {
+      return;
+    }
+
+    setError("");
+    setSaving(true);
+
+    try {
+      const response = await api.put(`/events/${eventId}`, { status: "closed" });
+      
+      if (response.data.ok) {
+        success("Registrations closed successfully!");
+        navigate(`/organizer/events/${eventId}`);
+      } else {
+        setError(response.data.error || "Failed to close registrations");
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Error closing registrations");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMarkCompleted = async () => {
+    if (!confirm("Are you sure you want to mark this event as completed?")) {
+      return;
+    }
+
+    setError("");
+    setSaving(true);
+
+    try {
+      const response = await api.put(`/events/${eventId}`, { status: "completed" });
+      
+      if (response.data.ok) {
+        success("Event marked as completed!");
+        navigate(`/organizer/events/${eventId}`);
+      } else {
+        setError(response.data.error || "Failed to mark event as completed");
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Error marking event as completed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handlePublish = async () => {
-    if (!window.confirm("Are you sure you want to publish this event? Once published, you cannot change it back to draft.")) {
+    if (!confirm("Are you sure you want to publish this event? Once published, you cannot change it back to draft.")) {
       return;
     }
 
@@ -166,7 +243,7 @@ export default function EditEvent() {
       const response = await api.put(`/events/${eventId}`, payload);
       
       if (response.data.ok) {
-        alert("Event published successfully!");
+        success("Event published successfully!");
         navigate(`/organizer/events/${eventId}`);
       } else {
         setError(response.data.error || "Failed to publish event");
@@ -188,6 +265,29 @@ export default function EditEvent() {
       return;
     }
 
+    // Validate dates can only be extended for published events
+    if (event?.status === "published") {
+      const newRegDeadline = new Date(registrationDeadline);
+      const oldRegDeadline = new Date(originalRegistrationDeadline);
+      const newStart = new Date(startAt);
+      const oldStart = new Date(originalStartAt);
+      const newEnd = new Date(endAt);
+      const oldEnd = new Date(originalEndAt);
+
+      if (newRegDeadline < oldRegDeadline) {
+        setError("Registration deadline can only be extended, not reduced");
+        return;
+      }
+      if (newStart < oldStart) {
+        setError("Event start date can only be extended, not reduced");
+        return;
+      }
+      if (newEnd < oldEnd) {
+        setError("Event end date can only be extended, not reduced");
+        return;
+      }
+    }
+
     const payload = {
       registrationDeadline: new Date(registrationDeadline).toISOString(),
       startAt: new Date(startAt).toISOString(),
@@ -201,6 +301,9 @@ export default function EditEvent() {
       payload.name = name;
       payload.description = description;
       payload.eligibility = eligibility;
+    } else if (event?.status === "published") {
+      // Published events can update description
+      payload.description = description;
       
       if (eventType === "normal") {
         payload.registrationFee = Number(registrationFee);
@@ -215,6 +318,11 @@ export default function EditEvent() {
         stockQty: Number(stockQty),
         variants: variants,
       };
+      
+      // For draft merch events, also allow editing purchase limit
+      if (event?.status === "draft") {
+        payload.merchandise.purchaseLimitPerParticipant = Number(purchaseLimit);
+      }
     }
 
     setSaving(true);
@@ -223,7 +331,7 @@ export default function EditEvent() {
       const response = await api.put(`/events/${eventId}`, payload);
       
       if (response.data.ok) {
-        alert("Event updated successfully!");
+        success("Event updated successfully!");
         navigate(`/organizer/events/${eventId}`);
       } else {
         setError(response.data.error || "Failed to update event");
@@ -239,6 +347,7 @@ export default function EditEvent() {
 
   return (
     <div className="create-event-container">
+      <Toast toasts={toasts} removeToast={removeToast} />
       <div className="create-event-header">
         <button className="back-btn" onClick={() => navigate(`/organizer/events/${eventId}`)}>
           ← Back
@@ -251,15 +360,21 @@ export default function EditEvent() {
 
       {error && <div className="error-message">{error}</div>}
 
-      {event?.status === "published" && (
-        <div className="info-box" style={{backgroundColor: '#e3f2fd', borderColor: '#2196f3'}}>
-          <p>ℹ️ <strong>Published events have limited editability.</strong> You can only update: Registration Limit (increase only), Tags, Dates & Deadlines{eventType === "merch" ? ", and Stock Quantity" : ""}.</p>
+      {event?.status === "draft" && (
+        <div className="info-box" style={{backgroundColor: '#fff3cd', borderColor: '#ffc107'}}>
+          <p>📝 <strong>Draft Event:</strong> You can edit all fields freely. Click "Publish Event" to make it public.</p>
         </div>
       )}
 
-      {event?.status === "draft" && (
-        <div className="info-box" style={{backgroundColor: '#fff3cd', borderColor: '#ffc107'}}>
-          <p>📝 <strong>This event is still a draft.</strong> You can edit all fields. Click "Publish Event" to make it public.</p>
+      {event?.status === "published" && (
+        <div className="info-box" style={{backgroundColor: '#e3f2fd', borderColor: '#2196f3'}}>
+          <p>ℹ️ <strong>Published Event:</strong> You can update Description, extend Deadlines/Dates, increase Registration Limit{eventType === "merch" ? ", update Stock Quantity" : ""}, and close registrations.</p>
+        </div>
+      )}
+
+      {(event?.status === "ongoing" || event?.status === "completed") && (
+        <div className="info-box" style={{backgroundColor: '#ffe0e0', borderColor: '#f44336'}}>
+          <p>🔒 <strong>{event?.status === "ongoing" ? "Ongoing" : "Completed"} Event:</strong> No field edits allowed. You can only change the status (mark as completed or closed).</p>
         </div>
       )}
 
@@ -278,7 +393,7 @@ export default function EditEvent() {
 
         {/* Basic Information */}
         <section className="form-section">
-          <h2>Basic Information {event?.status === "published" && "(Read-only)"}</h2>
+          <h2>Basic Information {["ongoing", "completed"].includes(event?.status) && "(Read-only)"}</h2>
 
           <div className="form-group">
             <label>Event Name</label>
@@ -286,10 +401,10 @@ export default function EditEvent() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              disabled={event?.status === "published"}
-              style={event?.status === "published" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
+              disabled={event?.status !== "draft"}
+              style={event?.status !== "draft" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
             />
-            {event?.status === "published" && <small className="form-help">Cannot be changed after publishing</small>}
+            {event?.status !== "draft" && <small className="form-help">Cannot be changed after publishing</small>}
           </div>
 
           <div className="form-group">
@@ -297,11 +412,12 @@ export default function EditEvent() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              disabled={event?.status === "published"}
+              disabled={["ongoing", "completed"].includes(event?.status)}
               rows="4"
-              style={event?.status === "published" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
+              style={["ongoing", "completed"].includes(event?.status) ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
             />
-            {event?.status === "published" && <small className="form-help">Cannot be changed after publishing</small>}
+            {event?.status === "published" && <small className="form-help">Description can be updated for published events</small>}
+            {["ongoing", "completed"].includes(event?.status) && <small className="form-help">Cannot be changed for {event?.status} events</small>}
           </div>
 
           <div className="form-row">
@@ -310,14 +426,14 @@ export default function EditEvent() {
               <select 
                 value={eligibility}
                 onChange={(e) => setEligibility(e.target.value)}
-                disabled={event?.status === "published"}
-                style={event?.status === "published" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
+                disabled={event?.status !== "draft"}
+                style={event?.status !== "draft" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
               >
                 <option value="all">All</option>
                 <option value="iiit">IIIT Students Only</option>
                 <option value="non-iiit">Non-IIIT Only</option>
               </select>
-              {event?.status === "published" && <small className="form-help">Cannot be changed after publishing</small>}
+              {event?.status !== "draft" && <small className="form-help">Cannot be changed after publishing</small>}
             </div>
 
             <div className="form-group">
@@ -329,8 +445,11 @@ export default function EditEvent() {
                 min={originalLimit}
                 placeholder="Max participants"
                 required
+                disabled={["ongoing", "completed"].includes(event?.status)}
+                style={["ongoing", "completed"].includes(event?.status) ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
               />
-              <small className="form-help">Can only be increased (minimum: {originalLimit})</small>
+              {event?.status === "published" && <small className="form-help">Can only be increased (minimum: {originalLimit})</small>}
+              {["ongoing", "completed"].includes(event?.status) && <small className="form-help">Cannot be changed for {event?.status} events</small>}
             </div>
           </div>
 
@@ -342,6 +461,7 @@ export default function EditEvent() {
                   value={tag}
                   onChange={(e) => handleTagChange(idx, e.target.value)}
                   style={{flex: 1}}
+                  disabled={["ongoing", "completed"].includes(event?.status)}
                 >
                   <option value="">Select a tag</option>
                   {PREDEFINED_INTERESTS.map((interest) => (
@@ -355,25 +475,29 @@ export default function EditEvent() {
                   onClick={() => handleRemoveTag(idx)}
                   className="cancel-btn"
                   style={{padding: '8px 16px'}}
+                  disabled={["ongoing", "completed"].includes(event?.status)}
                 >
                   Remove
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={handleAddTag}
-              className="submit-btn"
-              style={{backgroundColor: '#2196f3', marginTop: '10px'}}
-            >
-              + Add Tag
-            </button>
+            {!["ongoing", "completed"].includes(event?.status) && (
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="submit-btn"
+                style={{backgroundColor: '#2196f3', marginTop: '10px'}}
+              >
+                + Add Tag
+              </button>
+            )}
+            {["ongoing", "completed"].includes(event?.status) && <small className="form-help">Tags cannot be changed for {event?.status} events</small>}
           </div>
         </section>
 
         {/* Dates & Deadlines (Editable) */}
         <section className="form-section">
-          <h2>Dates & Deadlines *</h2>
+          <h2>Dates & Deadlines * {["ongoing", "completed"].includes(event?.status) && "(Read-only)"}</h2>
 
           <div className="form-row">
             <div className="form-group">
@@ -383,7 +507,10 @@ export default function EditEvent() {
                 value={registrationDeadline}
                 onChange={(e) => setRegistrationDeadline(e.target.value)}
                 required
+                disabled={["ongoing", "completed"].includes(event?.status)}
+                style={["ongoing", "completed"].includes(event?.status) ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
               />
+              {event?.status === "published" && <small className="form-help">Can only be extended (moved forward)</small>}
             </div>
 
             <div className="form-group">
@@ -393,7 +520,10 @@ export default function EditEvent() {
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
                 required
+                disabled={["ongoing", "completed"].includes(event?.status)}
+                style={["ongoing", "completed"].includes(event?.status) ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
               />
+              {event?.status === "published" && <small className="form-help">Can only be extended (moved forward)</small>}
             </div>
           </div>
 
@@ -405,9 +535,13 @@ export default function EditEvent() {
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
                 required
+                disabled={["ongoing", "completed"].includes(event?.status)}
+                style={["ongoing", "completed"].includes(event?.status) ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
               />
+              {event?.status === "published" && <small className="form-help">Can only be extended (moved forward)</small>}
             </div>
           </div>
+          {["ongoing", "completed"].includes(event?.status) && <small className="form-help">Dates cannot be changed for {event?.status} events</small>}
         </section>
 
         {/* Normal Event Details */}
@@ -455,6 +589,7 @@ export default function EditEvent() {
                             <option value="tel">Phone</option>
                             <option value="date">Date</option>
                             <option value="textarea">Long Text</option>
+                            <option value="file">File Upload</option>
                           </select>
                         </div>
                         <div className="form-group" style={{flex: 1, display: 'flex', alignItems: 'flex-end'}}>
@@ -534,49 +669,143 @@ export default function EditEvent() {
                 <input
                   type="number"
                   value={purchaseLimit}
-                  disabled
-                  style={{backgroundColor: '#f5f5f5', cursor: 'not-allowed'}}
+                  onChange={(e) => setPurchaseLimit(e.target.value)}
+                  disabled={event?.status === "published"}
+                  min="1"
+                  style={event?.status === "published" ? {backgroundColor: '#f5f5f5', cursor: 'not-allowed'} : {}}
                 />
-                <small className="form-help">Cannot be changed after publishing</small>
+                {event?.status === "published" && <small className="form-help">Cannot be changed after publishing</small>}
               </div>
             </div>
 
             {variants.length > 0 && (
               <div className="form-subsection">
                 <h3>Merchandise Variants</h3>
-                <div className="variants-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Size</th>
-                        <th>Color</th>
-                        <th>SKU</th>
-                        <th>Price (₹)</th>
-                        <th>Stock Quantity</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {variants.map((v, idx) => (
-                        <tr key={idx}>
-                          <td>{v.size}</td>
-                          <td>{v.color}</td>
-                          <td>{v.sku}</td>
-                          <td>₹{v.price}</td>
-                          <td>
-                            <input
-                              type="number"
-                              value={v.stockQty}
-                              onChange={(e) => handleVariantStockChange(idx, e.target.value)}
-                              min="0"
-                              style={{width: '80px', padding: '5px'}}
-                            />
-                          </td>
+                {event?.status === "draft" ? (
+                  <div>
+                    <div className="variants-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Size</th>
+                            <th>Color</th>
+                            <th>SKU</th>
+                            <th>Price (₹)</th>
+                            <th>Stock Quantity</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {variants.map((v, idx) => (
+                            <tr key={idx}>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={v.size}
+                                  onChange={(e) => handleVariantChange(idx, "size", e.target.value)}
+                                  placeholder="e.g., M"
+                                  style={{width: '80px', padding: '5px'}}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={v.color}
+                                  onChange={(e) => handleVariantChange(idx, "color", e.target.value)}
+                                  placeholder="e.g., Red"
+                                  style={{width: '80px', padding: '5px'}}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={v.sku}
+                                  onChange={(e) => handleVariantChange(idx, "sku", e.target.value)}
+                                  placeholder="e.g., SKU123"
+                                  style={{width: '80px', padding: '5px'}}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={v.price}
+                                  onChange={(e) => handleVariantChange(idx, "price", e.target.value)}
+                                  min="0"
+                                  style={{width: '80px', padding: '5px'}}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={v.stockQty}
+                                  onChange={(e) => handleVariantChange(idx, "stockQty", e.target.value)}
+                                  min="0"
+                                  style={{width: '80px', padding: '5px'}}
+                                />
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveVariant(idx)}
+                                  className="cancel-btn"
+                                  style={{padding: '5px 10px', fontSize: '12px'}}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddVariant}
+                      className="submit-btn"
+                      style={{marginTop: '10px', backgroundColor: '#2196f3'}}
+                    >
+                      + Add Variant
+                    </button>
+                  </div>
+                ) : (
+                  <div className="variants-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Size</th>
+                          <th>Color</th>
+                          <th>SKU</th>
+                          <th>Price (₹)</th>
+                          <th>Stock Quantity</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <small className="form-help">Update stock quantities for each variant. Total is calculated automatically.</small>
+                      </thead>
+                      <tbody>
+                        {variants.map((v, idx) => (
+                          <tr key={idx}>
+                            <td>{v.size}</td>
+                            <td>{v.color}</td>
+                            <td>{v.sku}</td>
+                            <td>₹{v.price}</td>
+                            <td>
+                              <input
+                                type="number"
+                                value={v.stockQty}
+                                onChange={(e) => handleVariantStockChange(idx, e.target.value)}
+                                min="0"
+                                style={{width: '80px', padding: '5px'}}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <small className="form-help">
+                  {event?.status === "draft" 
+                    ? "Add, edit, or remove variants before publishing." 
+                    : "Update stock quantities only. Other fields are locked."}
+                </small>
               </div>
             )}
           </section>
@@ -591,6 +820,7 @@ export default function EditEvent() {
           >
             Cancel
           </button>
+          
           {event?.status === "draft" && (
             <button 
               type="button" 
@@ -602,9 +832,36 @@ export default function EditEvent() {
               {publishing ? "Publishing..." : "📢 Publish Event"}
             </button>
           )}
-          <button type="submit" className="submit-btn" disabled={saving || publishing}>
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+          
+          {event?.status === "published" && (
+            <button 
+              type="button" 
+              onClick={handleCloseRegistrations} 
+              className="submit-btn"
+              style={{backgroundColor: '#ff9800', marginRight: '10px'}}
+              disabled={saving}
+            >
+              🚫 Close Registrations
+            </button>
+          )}
+          
+          {event?.status === "ongoing" && (
+            <button 
+              type="button" 
+              onClick={handleMarkCompleted} 
+              className="submit-btn"
+              style={{backgroundColor: '#4caf50', marginRight: '10px'}}
+              disabled={saving}
+            >
+              ✓ Mark as Completed
+            </button>
+          )}
+          
+          {!["ongoing", "completed"].includes(event?.status) && (
+            <button type="submit" className="submit-btn" disabled={saving || publishing}>
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          )}
         </div>
       </form>
     </div>

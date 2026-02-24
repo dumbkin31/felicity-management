@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { AuthCard } from "../../components/AuthCard";
 import "./Auth.css";
 
 export default function Login() {
@@ -37,10 +38,7 @@ export default function Login() {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
-        <h1>Felicity Event Management</h1>
-        <h2>Login</h2>
-        
+      <AuthCard title="Felicity Event Management" subtitle="Login">
         {error && <div className="error-message">{error}</div>}
         
         <form onSubmit={handleSubmit}>
@@ -67,7 +65,6 @@ export default function Login() {
               placeholder="Enter your password"
             />
           </div>
-
           <button type="submit" disabled={loading} className="btn-primary">
             {loading ? "Logging in..." : "Login"}
           </button>
@@ -76,7 +73,7 @@ export default function Login() {
         <p className="auth-link">
           Don't have an account? <Link to="/register">Register here</Link>
         </p>
-      </div>
+      </AuthCard>
     </div>
   );
 }

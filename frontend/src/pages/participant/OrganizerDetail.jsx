@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useMessage } from "../../hooks/useMessage";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import useFollowOrganizer from "../../hooks/useFollowOrganizer";
@@ -11,9 +12,8 @@ export default function OrganizerDetail() {
   const [events, setEvents] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [eventFilter, setEventFilter] = useState("all"); // "all", "upcoming", "past"
+  const [eventFilter, setEventFilter] = useState("all");
+  const { success, error, successMsg, errorMsg } = useMessage();
 
   useEffect(() => {
     fetchData();
@@ -51,11 +51,8 @@ export default function OrganizerDetail() {
 
   const { follow, unfollow } = useFollowOrganizer({
     onProfileUpdated: refreshProfile,
-    onSuccess: (message) => {
-      setSuccess(message);
-      setTimeout(() => setSuccess(""), 2000);
-    },
-    onError: (message) => setError(message),
+    onSuccess: success,
+    onError: error,
   });
 
   const isFollowing = () => {
@@ -74,12 +71,12 @@ export default function OrganizerDetail() {
     );
   }
 
-  if (error && !organizer) {
+  if (errorMsg && !organizer) {
     return (
       <>
         <Navbar />
         <div className="organizer-detail-container">
-          <div className="error">{error}</div>
+          <div className="error">{errorMsg}</div>
           <Link to="/organizers" className="back-link">
             ← Back to Organizers
           </Link>
@@ -98,8 +95,8 @@ export default function OrganizerDetail() {
           ← Back to Organizers
         </Link>
 
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
+        {errorMsg && <div className="error">{errorMsg}</div>}
+        {successMsg && <div className="success">{successMsg}</div>}
 
         {/* Organizer Header */}
         <div className="organizer-header">

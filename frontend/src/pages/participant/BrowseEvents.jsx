@@ -100,7 +100,7 @@ export default function BrowseEvents() {
             <select value={type} onChange={(e) => setType(e.target.value)} className="filter-select">
               <option value="">All Types</option>
               <option value="normal">Normal</option>
-              <option value="merchandise">Merchandise</option>
+              <option value="merch">Merchandise</option>
             </select>
 
             <select value={eligibility} onChange={(e) => setEligibility(e.target.value)} className="filter-select">
@@ -178,7 +178,7 @@ export default function BrowseEvents() {
                   <p className="description">{event.description?.substring(0, 100)}...</p>
                   <div className="event-footer">
                     <p className="date">{new Date(event.startAt).toLocaleDateString()}</p>
-                    {event.type === "merchandise" && event.price && (
+                    {event.type === "merch" && event.price && (
                       <p className="price">₹{event.price}</p>
                     )}
                   </div>

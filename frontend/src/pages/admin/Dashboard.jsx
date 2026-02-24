@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { StatCard } from "../../components/StatCard";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import "./Dashboard.css";
@@ -54,37 +55,10 @@ export default function AdminDashboard() {
 
         {/* Analytics Stats */}
         <section className="stats-section">
-          <div className="stat-card">
-            <div className="stat-icon">🏢</div>
-            <div className="stat-content">
-              <div className="stat-value">{dashboardData?.totalOrganizers || 0}</div>
-              <div className="stat-label">Total Organizers</div>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">👥</div>
-            <div className="stat-content">
-              <div className="stat-value">{dashboardData?.totalParticipants || 0}</div>
-              <div className="stat-label">Total Participants</div>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">📅</div>
-            <div className="stat-content">
-              <div className="stat-value">{dashboardData?.totalEvents || 0}</div>
-              <div className="stat-label">Total Events</div>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">📝</div>
-            <div className="stat-content">
-              <div className="stat-value">{dashboardData?.totalRegistrations || 0}</div>
-              <div className="stat-label">Total Registrations</div>
-            </div>
-          </div>
+          <StatCard value={dashboardData?.totalOrganizers || 0} label="Total Organizers" />
+          <StatCard value={dashboardData?.totalParticipants || 0} label="Total Participants" />
+          <StatCard value={dashboardData?.totalEvents || 0} label="Total Events" />
+          <StatCard value={dashboardData?.totalRegistrations || 0} label="Total Registrations" />
         </section>
       </div>
     </>

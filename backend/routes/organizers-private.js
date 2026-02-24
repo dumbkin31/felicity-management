@@ -54,7 +54,8 @@ router.get("/organizer/dashboard", requireAuth, requireRole("organizer"), async 
       endAt: e.endAt,
       registrationDeadline: e.registrationDeadline,
       tags: e.tags,
-      totalRegistrations: e.totalRegistrations || 0,
+      totalRegistrations: e.totalRegistrations || 0, // All registrations (including pending)
+      confirmedRegistrations: e.confirmedRegistrations || 0, // Only confirmed
       totalRevenue: e.totalRevenue || 0,
       totalAttendance: e.totalAttendance || 0,
     }));
@@ -69,6 +70,7 @@ router.get("/organizer/dashboard", requireAuth, requireRole("organizer"), async 
           totalRegistrations,
           totalRevenue,
           totalAttendance,
+          confirmedRegistrations
         },
       },
     });

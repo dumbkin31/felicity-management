@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useMessage } from "../../hooks/useMessage";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import useFollowOrganizer from "../../hooks/useFollowOrganizer";
@@ -14,12 +15,9 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [editingInterests, setEditingInterests] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const { success, error, successMsg, errorMsg } = useMessage();
 
   // Form fields
   const [firstName, setFirstName] = useState("");
@@ -97,25 +95,20 @@ export default function Profile() {
 
   const { follow, unfollow } = useFollowOrganizer({
     onProfileUpdated: refreshProfile,
-    onSuccess: (message) => {
-      setSuccess(message);
-      setTimeout(() => setSuccess(""), 2000);
-    },
-    onError: (message) => setError(message),
+    onSuccess: success,
+    onError: error,
   });
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError("New passwords do not match");
+      error("New passwords do not match");
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
+      error("Password must be at least 6 characters");
       return;
     }
 
@@ -124,12 +117,11 @@ export default function Profile() {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
-      setPasswordSuccess("Password changed successfully!");
+      success("Password changed successfully!");
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setChangingPassword(false);
-      setTimeout(() => setPasswordSuccess(""), 3000);
     } catch (err) {
-      setPasswordError(err.response?.data?.error || "Failed to change password");
+      error(err.response?.data?.error || "Failed to change password");
     }
   };
 
@@ -155,8 +147,8 @@ export default function Profile() {
       <div className="profile-container">
         <h1>My Profile</h1>
 
-        {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
+        {errorMsg && <div className="error">{errorMsg}</div>}
+        {successMsg && <div className="success">{successMsg}</div>}
 
         {/* Profile Info Section */}
         <section className="profile-section">

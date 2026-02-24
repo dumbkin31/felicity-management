@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../../hooks/useToast";
 import api from "../../api/axios";
+import Toast from "../../components/Toast";
 import { PREDEFINED_INTERESTS } from "../../constants/interests";
 import "./CreateEvent.css";
 
@@ -8,6 +10,7 @@ export default function CreateEvent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { success, error: errorToast, toasts, removeToast } = useToast();
 
   const [eventType, setEventType] = useState("normal");
   const [status, setStatus] = useState("draft");
@@ -27,6 +30,7 @@ export default function CreateEvent() {
   const [formFields, setFormFields] = useState([]);
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldType, setNewFieldType] = useState("text");
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
 
   // Merchandise fields
   const [variants, setVariants] = useState([]);
@@ -42,15 +46,16 @@ export default function CreateEvent() {
 
   const addFormField = () => {
     if (!newFieldName) {
-      alert("Field name is required");
+      errorToast("Field name is required");
       return;
     }
     setFormFields([
       ...formFields,
-      { label: newFieldName, type: newFieldType, required: false },
+      { label: newFieldName, type: newFieldType, required: newFieldRequired },
     ]);
     setNewFieldName("");
     setNewFieldType("text");
+    setNewFieldRequired(false);
   };
 
   const removeFormField = (index) => {
@@ -67,12 +72,16 @@ export default function CreateEvent() {
     setFormFields(newFields);
   };
 
+  const calculateTotalStock = (variantsList) => {
+    return variantsList.reduce((sum, v) => sum + Number(v.stockQty || 0), 0);
+  };
+
   const addVariant = () => {
     if (!newVariant.size || !newVariant.color || !newVariant.sku || !newVariant.price || !newVariant.stockQty) {
-      alert("All variant fields are required");
+      errorToast("All variant fields are required");
       return;
     }
-    setVariants([
+    const updatedVariants = [
       ...variants,
       {
         size: newVariant.size,
@@ -81,12 +90,16 @@ export default function CreateEvent() {
         price: Number(newVariant.price),
         stockQty: Number(newVariant.stockQty),
       },
-    ]);
+    ];
+    setVariants(updatedVariants);
+    setStockQty(calculateTotalStock(updatedVariants).toString());
     setNewVariant({ size: "", color: "", sku: "", price: "", stockQty: "" });
   };
 
   const removeVariant = (index) => {
-    setVariants(variants.filter((_, i) => i !== index));
+    const updatedVariants = variants.filter((_, i) => i !== index);
+    setVariants(updatedVariants);
+    setStockQty(calculateTotalStock(updatedVariants).toString());
   };
 
   // Handle tag changes
@@ -115,7 +128,7 @@ export default function CreateEvent() {
     }
 
     if (eventType === "normal" && formFields.length === 0) {
-      alert("Note: You haven't added any custom form fields. Registration will only collect email/name.");
+      success("Note: You haven't added any custom form fields. Registration will only collect email/name.");
     }
 
     if (eventType === "merch" && variants.length === 0) {
@@ -152,7 +165,7 @@ export default function CreateEvent() {
 
       const response = await api.post("/events", payload);
       if (response.data.ok) {
-        alert("Event created successfully!");
+        success("Event created successfully!");
         navigate("/organizer/dashboard");
       } else {
         setError(response.data.error || "Failed to create event");
@@ -166,6 +179,7 @@ export default function CreateEvent() {
 
   return (
     <div className="create-event-container">
+      <Toast toasts={toasts} removeToast={removeToast} />
       <div className="create-event-header">
         <button className="back-btn" onClick={() => navigate("/organizer/dashboard")}>
           ← Back
@@ -371,7 +385,19 @@ export default function CreateEvent() {
                     <option value="number">Number</option>
                     <option value="textarea">Long Text</option>
                     <option value="select">Dropdown</option>
+                    <option value="file">File Upload</option>
                   </select>
+                </div>
+
+                <div className="form-group" style={{display: 'flex', alignItems: 'flex-end'}}>
+                  <label style={{display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '0'}}>
+                    <input
+                      type="checkbox"
+                      checked={newFieldRequired}
+                      onChange={(e) => setNewFieldRequired(e.target.checked)}
+                    />
+                    Required Field
+                  </label>
                 </div>
 
                 <button type="button" onClick={addFormField} className="add-btn">
@@ -387,6 +413,7 @@ export default function CreateEvent() {
                       <li key={idx} className="field-item">
                         <span>
                           {field.label} <em>({field.type})</em>
+                          {field.required && <strong style={{color: '#e74c3c'}}> *</strong>}
                         </span>
                         <div className="field-actions">
                           <button
@@ -431,14 +458,15 @@ export default function CreateEvent() {
 
             <div className="form-row">
               <div className="form-group">
-                <label>Total Stock Quantity</label>
+                <label>Total Stock Quantity (Calculated)</label>
                 <input
                   type="number"
                   value={stockQty}
-                  onChange={(e) => setStockQty(e.target.value)}
-                  min="0"
-                  placeholder="Total items available"
+                  disabled
+                  placeholder="Auto-calculated from variants"
+                  style={{backgroundColor: '#f5f5f5', cursor: 'not-allowed'}}
                 />
+                <small className="form-help">Auto-calculated from variant stock quantities</small>
               </div>
 
               <div className="form-group">

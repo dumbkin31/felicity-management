@@ -99,7 +99,7 @@ router.put("/admin/password-reset/approve/:requestId", requireAuth, requireRole(
     const organizers = organizersCol();
     await organizers.updateOne(
       { _id: request.userId },
-      { $set: { password: hashedPassword, passwordResetAt: new Date() } }
+      { $set: { passwordHash: hashedPassword, passwordResetAt: new Date() } }
     );
 
     // Update request status

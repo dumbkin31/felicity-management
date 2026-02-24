@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { AuthCard } from "../../components/AuthCard";
 import "./Auth.css";
 
 export default function Register() {
@@ -72,10 +73,7 @@ export default function Register() {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
-        <h1>Felicity Event Management</h1>
-        <h2>Register</h2>
-        
+      <AuthCard title="Felicity Event Management" subtitle="Register">
         {error && <div className="error-message">{error}</div>}
         
         <form onSubmit={handleSubmit}>
@@ -159,7 +157,6 @@ export default function Register() {
               />
             </div>
           </div>
-
           <button type="submit" disabled={loading} className="btn-primary">
             {loading ? "Registering..." : "Register"}
           </button>
@@ -168,7 +165,7 @@ export default function Register() {
         <p className="auth-link">
           Already have an account? <Link to="/login">Login here</Link>
         </p>
-      </div>
+      </AuthCard>
     </div>
   );
 }

@@ -3,11 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import DiscussionForum from "../../components/DiscussionForum";
+import { useFileUpload } from "../../hooks/useFileUpload";
 import "./EventDetails.css";
 
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { fileToBase64 } = useFileUpload();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -132,8 +134,18 @@ export default function EventDetails() {
     }
   };
 
-  const handleFormFieldChange = (fieldLabel, value) => {
-    setFormData(prev => ({ ...prev, [fieldLabel]: value }));
+  const handleFormFieldChange = async (fieldLabel, value, isFile = false) => {
+    if (isFile && value) {
+      try {
+        const base64 = await fileToBase64(value);
+        setFormData(prev => ({ ...prev, [fieldLabel]: base64 }));
+      } catch (error) {
+        console.error('Error converting file:', error);
+        setError('Failed to process file upload');
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [fieldLabel]: value }));
+    }
   };
 
   const handleVariantQuantityChange = (variantIndex, qty) => {
@@ -473,6 +485,22 @@ export default function EventDetails() {
                           onChange={(e) => handleFormFieldChange(field.label, e.target.checked)}
                           disabled={registering}
                         />
+                      ) : field.type === "file" ? (
+                        <div>
+                          <input
+                            id={`field-${index}`}
+                            type="file"
+                            onChange={(e) => handleFormFieldChange(field.label, e.target.files[0], true)}
+                            required={field.required}
+                            disabled={registering}
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          />
+                          {formData[field.label] && (
+                            <small style={{color: '#27ae60', display: 'block', marginTop: '5px'}}>
+                              ✓ File uploaded
+                            </small>
+                          )}
+                        </div>
                       ) : (
                         <input
                           id={`field-${index}`}

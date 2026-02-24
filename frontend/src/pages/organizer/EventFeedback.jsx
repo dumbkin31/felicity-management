@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useFetchData } from "../../hooks/useFetchData";
+import { useCSVExport } from "../../hooks/useCSVExport";
+import { StatCard } from "../../components/StatCard";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import "./EventFeedback.css";
@@ -7,50 +10,26 @@ import "./EventFeedback.css";
 const EventFeedback = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const [feedback, setFeedback] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
 
-  useEffect(() => {
-    fetchFeedback();
-  }, [eventId]);
+  const { data: feedbackData, loading, error } = useFetchData(
+    async () => {
+      const response = await api.get(`/organizer/feedback/${eventId}`);
+      return response.data.ok ? {
+        feedback: response.data.feedback,
+        stats: response.data.stats,
+      } : null;
+    },
+    [eventId]
+  );
 
-  const fetchFeedback = async () => {
-    try {
-      const response = await api.get(
-        `/organizer/feedback/${eventId}`
-      );
+  const { exportCSV } = useCSVExport();
 
-      if (response.data.ok) {
-        setFeedback(response.data.feedback);
-        setStats(response.data.stats);
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to load feedback");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const feedback = feedbackData?.feedback || [];
+  const stats = feedbackData?.stats || null;
 
-  const handleExport = async () => {
-    try {
-      const response = await api.get(
-        `/organizer/feedback/${eventId}/export`,
-        { responseType: "blob" }
-      );
-
-      const blob = new Blob([response.data], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `feedback-${eventId}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to export feedback");
-    }
+  const handleExport = () => {
+    exportCSV(`/organizer/feedback/${eventId}/export`, `feedback-${eventId}.csv`);
   };
 
   const filteredFeedback = filter === "all"
@@ -80,14 +59,8 @@ const EventFeedback = () => {
       {stats && stats.total > 0 ? (
         <>
           <div className="stats-section">
-            <div className="stat-card highlight">
-              <div className="stat-value">{stats.averageRating} ★</div>
-              <div className="stat-label">Average Rating</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">{stats.total}</div>
-              <div className="stat-label">Total Responses</div>
-            </div>
+            <StatCard value={`${stats.averageRating} ★`} label="Average Rating" highlight />
+            <StatCard value={stats.total} label="Total Responses" />
           </div>
 
           <div className="distribution-card">

@@ -127,7 +127,7 @@ export default function OngoingEvents() {
                       <div className="event-detail">
                         <span className="detail-label">Registrations:</span>
                         <span className="detail-value registrations">
-                          {event.registrationCount || 0}
+                          {event.confirmedRegistrations || 0}
                         </span>
                       </div>
                     </div>

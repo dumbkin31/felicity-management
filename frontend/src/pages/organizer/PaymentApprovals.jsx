@@ -1,40 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useFetchData } from "../../hooks/useFetchData";
+import { useModal } from "../../hooks/useModal";
+import { useConfirm } from "../../hooks/useConfirm";
+import { useToast } from "../../hooks/useToast";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import Toast from "../../components/Toast";
 import "./PaymentApprovals.css";
 
 const PaymentApprovals = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const rejectionModal = useModal();
+  const { confirm } = useConfirm();
+  const { success, error: errorToast, toasts, removeToast } = useToast();
 
-  useEffect(() => {
-    fetchPayments();
-  }, [eventId]);
-
-  const fetchPayments = async () => {
-    try {
-      const response = await api.get(
-        `/organizer/payments/pending/${eventId}`
-      );
-
-      if (response.data.ok) {
-        setPayments(response.data.payments);
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to fetch payments");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: payments = [], loading, error, retry } = useFetchData(
+    async () => {
+      const response = await api.get(`/organizer/payments/pending/${eventId}`);
+      return response.data.ok ? response.data.payments : [];
+    },
+    [eventId]
+  );
 
   const handleApprove = async (registrationId) => {
-    if (!window.confirm("Are you sure you want to approve this payment?")) return;
+    if (!confirm("Are you sure you want to approve this payment?")) return;
 
     try {
       const response = await api.put(
@@ -43,17 +36,17 @@ const PaymentApprovals = () => {
       );
 
       if (response.data.ok) {
-        alert("Payment approved successfully!");
-        fetchPayments();
+        success("Payment approved successfully!");
+        retry();
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to approve payment");
+      errorToast(err.response?.data?.error || "Failed to approve payment");
     }
   };
 
   const handleReject = async (registrationId) => {
     if (!rejectionReason.trim()) {
-      alert("Please provide a reason for rejection");
+      errorToast("Please provide a reason for rejection");
       return;
     }
 
@@ -64,13 +57,13 @@ const PaymentApprovals = () => {
       );
 
       if (response.data.ok) {
-        alert("Payment rejected");
-        setSelectedPayment(null);
+        success("Payment rejected");
         setRejectionReason("");
-        fetchPayments();
+        rejectionModal.close();
+        retry();
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to reject payment");
+      errorToast(err.response?.data?.error || "Failed to reject payment");
     }
   };
 
@@ -89,6 +82,7 @@ const PaymentApprovals = () => {
   return (
     <>
       <Navbar />
+      <Toast toasts={toasts} removeToast={removeToast} />
       <div className="payment-approvals">
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
         <button 
@@ -158,7 +152,11 @@ const PaymentApprovals = () => {
                     Approve & Generate QR
                   </button>
                   <button
-                    onClick={() => setSelectedPayment(payment)}
+                    onClick={() => {
+                      setSelectedPaymentId(payment._id);
+                      rejectionModal.open();
+                      setRejectionReason("");
+                    }}
                     className="btn-reject"
                   >
                     Reject
@@ -182,8 +180,8 @@ const PaymentApprovals = () => {
         </div>
       )}
 
-      {selectedPayment && (
-        <div className="modal-overlay" onClick={() => setSelectedPayment(null)}>
+      {rejectionModal.isOpen && (
+        <div className="modal-overlay" onClick={rejectionModal.close}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Reject Payment</h3>
             <p>Provide a reason for rejecting this payment:</p>
@@ -194,10 +192,10 @@ const PaymentApprovals = () => {
               rows="4"
             />
             <div className="modal-buttons">
-              <button onClick={() => handleReject(selectedPayment._id)} className="btn-confirm">
+              <button onClick={() => handleReject(selectedPaymentId)} className="btn-confirm">
                 Confirm Rejection
               </button>
-              <button onClick={() => setSelectedPayment(null)} className="btn-cancel">
+              <button onClick={rejectionModal.close} className="btn-cancel">
                 Cancel
               </button>
             </div>
