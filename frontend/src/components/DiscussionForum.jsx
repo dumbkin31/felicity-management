@@ -1,15 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import "./DiscussionForum.css";
 
-const DiscussionForum = ({ isOrganizer = false }) => {
-  const { eventId } = useParams();
+const DiscussionForum = ({ isOrganizer = false, eventId: eventIdProp }) => {
+  const { eventId: eventIdParam, id: eventIdAlt } = useParams();
+  const eventId = eventIdProp || eventIdParam || eventIdAlt;
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [postAsAnnouncement, setPostAsAnnouncement] = useState(false);
+  const lastCountRef = useRef(0);
 
   useEffect(() => {
     fetchMessages();
@@ -17,18 +21,26 @@ const DiscussionForum = ({ isOrganizer = false }) => {
     return () => clearInterval(interval);
   }, [eventId]);
 
+  const countMessages = (items) => {
+    return items.reduce((acc, msg) => {
+      const replies = msg.replies ? countMessages(msg.replies) : 0;
+      return acc + 1 + replies;
+    }, 0);
+  };
+
   const fetchMessages = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/forum/${eventId}/messages`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.get(
+        `/forum/${eventId}/messages`
       );
 
       if (response.data.ok) {
         setMessages(response.data.messages);
+        const total = countMessages(response.data.messages || []);
+        if (lastCountRef.current && total > lastCountRef.current) {
+          setNewMessagesCount(total - lastCountRef.current);
+        }
+        lastCountRef.current = total;
       }
     } catch (err) {
       setError("Failed to load messages");
@@ -44,21 +56,19 @@ const DiscussionForum = ({ isOrganizer = false }) => {
     }
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/forum/${eventId}/message`,
+      const response = await api.post(
+        `/forum/${eventId}/message`,
         {
           content: newMessage,
           parentId: replyTo?._id || null,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
+          messageType: postAsAnnouncement ? "announcement" : "message",
         }
       );
 
       if (response.data.ok) {
         setNewMessage("");
         setReplyTo(null);
+        setPostAsAnnouncement(false);
         fetchMessages();
       }
     } catch (err) {
@@ -68,13 +78,9 @@ const DiscussionForum = ({ isOrganizer = false }) => {
 
   const handleReact = async (messageId, emoji) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `${import.meta.env.VITE_API_BASE_URL}/forum/message/${messageId}/react`,
-        { emoji },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      await api.put(
+        `/forum/message/${messageId}/react`,
+        { emoji }
       );
       fetchMessages();
     } catch (err) {
@@ -84,13 +90,9 @@ const DiscussionForum = ({ isOrganizer = false }) => {
 
   const handlePin = async (messageId) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/forum/message/${messageId}/pin`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      await api.put(
+        `/organizer/forum/message/${messageId}/pin`,
+        {}
       );
       fetchMessages();
     } catch (err) {
@@ -102,12 +104,8 @@ const DiscussionForum = ({ isOrganizer = false }) => {
     if (!window.confirm("Are you sure you want to delete this message?")) return;
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/forum/message/${messageId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      await api.delete(
+        `/organizer/forum/message/${messageId}`
       );
       fetchMessages();
     } catch (err) {
@@ -118,6 +116,7 @@ const DiscussionForum = ({ isOrganizer = false }) => {
   const MessageCard = ({ message, isReply = false }) => (
     <div className={`message-card ${isReply ? "reply" : ""} ${message.isPinned ? "pinned" : ""}`}>
       {message.isPinned && <div className="pin-badge">📌 Pinned</div>}
+      {message.messageType === "announcement" && <div className="pin-badge">📣 Announcement</div>}
       
       <div className="message-header">
         <div className="author-info">
@@ -155,7 +154,12 @@ const DiscussionForum = ({ isOrganizer = false }) => {
           </button>
           {isOrganizer && (
             <>
-              <button onClick={() => handlePin(message._id)} className="pin-btn">
+              <button
+                onClick={() => handlePin(message._id)}
+                className="pin-btn"
+                disabled={message.isAnnouncement}
+                title={message.isAnnouncement ? "Announcements are always pinned" : undefined}
+              >
                 {message.isPinned ? "Unpin" : "Pin"}
               </button>
               <button onClick={() => handleDelete(message._id)} className="delete-btn">
@@ -182,6 +186,19 @@ const DiscussionForum = ({ isOrganizer = false }) => {
     <div className="discussion-forum">
       <h2>Discussion Forum</h2>
 
+      {newMessagesCount > 0 && (
+        <div className="success-message">
+          {newMessagesCount} new message{newMessagesCount > 1 ? "s" : ""} posted.
+          <button
+            onClick={() => setNewMessagesCount(0)}
+            className="cancel-reply"
+            style={{ marginLeft: "10px" }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="post-section">
         {replyTo && (
           <div className="reply-indicator">
@@ -198,6 +215,16 @@ const DiscussionForum = ({ isOrganizer = false }) => {
           rows="4"
           className="message-input"
         />
+        {isOrganizer && !replyTo && (
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+            <input
+              type="checkbox"
+              checked={postAsAnnouncement}
+              onChange={(e) => setPostAsAnnouncement(e.target.checked)}
+            />
+            Post as announcement
+          </label>
+        )}
         <button onClick={handlePostMessage} className="post-btn">
           {replyTo ? "Post Reply" : "Post Message"}
         </button>

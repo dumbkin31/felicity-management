@@ -62,8 +62,8 @@
 }
 
 .stat-card.highlight {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #fff9e6;
+  color: #333;
 }
 
 .stat-value {

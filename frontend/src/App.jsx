@@ -11,6 +11,7 @@ import Onboarding from "./pages/auth/Onboarding";
 import ParticipantDashboard from "./pages/participant/Dashboard";
 import BrowseEvents from "./pages/participant/BrowseEvents";
 import EventDetails from "./pages/participant/EventDetails";
+import ParticipantEventFeedback from "./pages/participant/EventFeedback";
 import ParticipantProfile from "./pages/participant/Profile";
 import OrganizersList from "./pages/participant/OrganizersList";
 import OrganizerDetail from "./pages/participant/OrganizerDetail";
@@ -25,6 +26,7 @@ import OngoingEvents from "./pages/organizer/OngoingEvents";
 import PaymentApprovals from "./pages/organizer/PaymentApprovals";
 import AttendanceTracker from "./pages/organizer/AttendanceTracker";
 import PasswordResetRequest from "./pages/organizer/PasswordResetRequest";
+import EventFeedback from "./pages/organizer/EventFeedback";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -91,6 +93,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={["participant"]}>
                 <EventDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:id/feedback"
+            element={
+              <ProtectedRoute roles={["participant"]}>
+                <ParticipantEventFeedback />
               </ProtectedRoute>
             }
           />
@@ -181,6 +191,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={["organizer"]}>
                 <AttendanceTracker />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:eventId/feedback"
+            element={
+              <ProtectedRoute roles={["organizer"]}>
+                <EventFeedback />
               </ProtectedRoute>
             }
           />

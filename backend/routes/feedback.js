@@ -20,8 +20,8 @@ router.post("/feedback/:eventId", requireAuth, requireRole("participant"), async
     // Verify participant attended the event
     const registrations = registrationsCol();
     const registration = await registrations.findOne({
-      eventId: new ObjectId(eventId),
-      participantId: new ObjectId(req.user.sub),
+      eventId: eventId.toString(),
+      participantId: req.user.sub,
       status: "confirmed",
       attended: true,
     });
@@ -36,8 +36,8 @@ router.post("/feedback/:eventId", requireAuth, requireRole("participant"), async
     // Check if already submitted feedback
     const feedback = feedbackCol();
     const existing = await feedback.findOne({
-      eventId: new ObjectId(eventId),
-      participantId: new ObjectId(req.user.sub),
+      eventId: eventId.toString(),
+      participantId: req.user.sub,
     });
 
     if (existing) {
@@ -46,8 +46,8 @@ router.post("/feedback/:eventId", requireAuth, requireRole("participant"), async
 
     // Submit feedback (anonymous - participantId stored for duplicate prevention only)
     const feedbackDoc = {
-      eventId: new ObjectId(eventId),
-      participantId: new ObjectId(req.user.sub), // Stored only for duplicate check
+      eventId: eventId.toString(),
+      participantId: req.user.sub, // Stored only for duplicate check
       rating: Number(rating),
       comment: comment || "",
       submittedAt: new Date(),
@@ -75,7 +75,7 @@ router.get("/organizer/feedback/:eventId", requireAuth, requireRole("organizer")
     const events = eventsCol();
     const event = await events.findOne({
       _id: new ObjectId(eventId),
-      organizerId: new ObjectId(req.user.sub),
+      organizerUserId: req.user.sub,
     });
 
     if (!event) {
@@ -85,7 +85,12 @@ router.get("/organizer/feedback/:eventId", requireAuth, requireRole("organizer")
     // Get all feedback (without participant IDs for anonymity)
     const feedback = feedbackCol();
     const allFeedback = await feedback
-      .find({ eventId: new ObjectId(eventId) })
+      .find({
+        $or: [
+          { eventId: eventId.toString() },
+          { eventId: new ObjectId(eventId) },
+        ],
+      })
       .sort({ submittedAt: -1 })
       .toArray();
 
@@ -135,7 +140,7 @@ router.get("/organizer/feedback/:eventId/export", requireAuth, requireRole("orga
     const events = eventsCol();
     const event = await events.findOne({
       _id: new ObjectId(eventId),
-      organizerId: new ObjectId(req.user.sub),
+      organizerUserId: req.user.sub,
     });
 
     if (!event) {
@@ -145,7 +150,12 @@ router.get("/organizer/feedback/:eventId/export", requireAuth, requireRole("orga
     // Get all feedback
     const feedback = feedbackCol();
     const allFeedback = await feedback
-      .find({ eventId: new ObjectId(eventId) })
+      .find({
+        $or: [
+          { eventId: eventId.toString() },
+          { eventId: new ObjectId(eventId) },
+        ],
+      })
       .sort({ submittedAt: -1 })
       .toArray();
 

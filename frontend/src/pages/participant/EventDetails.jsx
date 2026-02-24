@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import DiscussionForum from "../../components/DiscussionForum";
 import "./EventDetails.css";
 
 export default function EventDetails() {
@@ -306,6 +307,13 @@ export default function EventDetails() {
           <div className="event-badge">{event.type}</div>
           <h1>{event.name}</h1>
           <p className="organizer-name">by {event.organizerId?.name || "Unknown Organizer"}</p>
+          <button
+            onClick={() => navigate(`/events/${id}/feedback`)}
+            className="register-btn"
+            style={{ padding: "8px 14px" }}
+          >
+            Give Feedback
+          </button>
         </div>
 
         <div className="event-body">
@@ -567,6 +575,9 @@ export default function EventDetails() {
               </button>
             </section>
           )}
+          <section className="event-section">
+            <DiscussionForum isOrganizer={false} eventId={id} />
+          </section>
         </div>
       </div>
     </>

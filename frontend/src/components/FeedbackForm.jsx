@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import api from "../api/axios";
 import "./FeedbackForm.css";
 
 const FeedbackForm = ({ eventId, onSubmitSuccess }) => {
@@ -21,13 +21,9 @@ const FeedbackForm = ({ eventId, onSubmitSuccess }) => {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/feedback/${eventId}`,
-        { rating, comment },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.post(
+        `/feedback/${eventId}`,
+        { rating, comment }
       );
 
       if (response.data.ok) {

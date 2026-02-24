@@ -1,6 +1,6 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
-const { forumMessagesCol, registrationsCol, eventsCol } = require("../config/collections");
+const { forumMessagesCol, registrationsCol, eventsCol, participantsCol, organizersCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
@@ -10,7 +10,7 @@ const router = express.Router();
 router.post("/forum/:eventId/message", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { content, parentId } = req.body;
+    const { content, parentId, messageType } = req.body;
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ ok: false, error: "Message content is required" });
@@ -26,14 +26,14 @@ router.post("/forum/:eventId/message", requireAuth, async (req, res) => {
       // Check if organizer owns the event
       const event = await events.findOne({
         _id: new ObjectId(eventId),
-        organizerId: new ObjectId(req.user.sub),
+        organizerUserId: req.user.sub,
       });
       canPost = !!event;
     } else if (req.user.role === "participant") {
       // Check if participant is registered
       const registration = await registrations.findOne({
-        eventId: new ObjectId(eventId),
-        participantId: new ObjectId(req.user.sub),
+        eventId: eventId.toString(),
+        participantId: req.user.sub,
         status: "confirmed",
       });
       canPost = !!registration;
@@ -43,16 +43,35 @@ router.post("/forum/:eventId/message", requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "You must be registered for this event to post" });
     }
 
+    if (messageType === "announcement" && req.user.role !== "organizer") {
+      return res.status(403).json({ ok: false, error: "Only organizers can post announcements" });
+    }
+
+    let authorName = "Anonymous";
+    if (req.user.role === "organizer") {
+      const organizer = await organizersCol().findOne({ _id: new ObjectId(req.user.sub) });
+      if (organizer?.organizerName) authorName = organizer.organizerName;
+    } else if (req.user.role === "participant") {
+      const participant = await participantsCol().findOne({ _id: new ObjectId(req.user.sub) });
+      if (participant) {
+        const fullName = `${participant.firstName || ""} ${participant.lastName || ""}`.trim();
+        authorName = fullName || "Participant";
+      }
+    }
+
     const messages = forumMessagesCol();
+    const isAnnouncement = messageType === "announcement";
     const message = {
-      eventId: new ObjectId(eventId),
-      authorId: new ObjectId(req.user.sub),
+      eventId: eventId.toString(),
+      authorId: req.user.sub,
       authorRole: req.user.role,
-      authorName: req.user.name || "Anonymous",
+      authorName,
       content: content.trim(),
       parentId: parentId ? new ObjectId(parentId) : null,
       reactions: {},
-      isPinned: false,
+      messageType: isAnnouncement ? "announcement" : "message",
+      isAnnouncement,
+      isPinned: isAnnouncement ? true : false,
       isDeleted: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -79,10 +98,13 @@ router.get("/forum/:eventId/messages", requireAuth, async (req, res) => {
 
     const allMessages = await messages
       .find({
-        eventId: new ObjectId(eventId),
+        $or: [
+          { eventId: eventId.toString() },
+          { eventId: new ObjectId(eventId) },
+        ],
         isDeleted: false,
       })
-      .sort({ isPinned: -1, createdAt: -1 })
+      .sort({ isAnnouncement: -1, isPinned: -1, createdAt: -1 })
       .toArray();
 
     // Organize into threads
@@ -174,9 +196,10 @@ router.delete("/organizer/forum/message/:messageId", requireAuth, async (req, re
     // Verify organizer owns the event
     if (req.user.role === "organizer") {
       const events = eventsCol();
+      const eventId = message.eventId instanceof ObjectId ? message.eventId : new ObjectId(message.eventId);
       const event = await events.findOne({
-        _id: message.eventId,
-        organizerId: new ObjectId(req.user.sub),
+        _id: eventId,
+        organizerUserId: req.user.sub,
       });
 
       if (!event) {
@@ -211,9 +234,10 @@ router.put("/organizer/forum/message/:messageId/pin", requireAuth, async (req, r
     // Verify organizer owns the event
     if (req.user.role === "organizer") {
       const events = eventsCol();
+      const eventId = message.eventId instanceof ObjectId ? message.eventId : new ObjectId(message.eventId);
       const event = await events.findOne({
-        _id: message.eventId,
-        organizerId: new ObjectId(req.user.sub),
+        _id: eventId,
+        organizerUserId: req.user.sub,
       });
 
       if (!event) {
@@ -221,12 +245,14 @@ router.put("/organizer/forum/message/:messageId/pin", requireAuth, async (req, r
       }
     }
 
+    const nextPinned = message.isAnnouncement ? true : !message.isPinned;
+
     await messages.updateOne(
       { _id: new ObjectId(messageId) },
-      { $set: { isPinned: !message.isPinned, updatedAt: new Date() } }
+      { $set: { isPinned: nextPinned, updatedAt: new Date() } }
     );
 
-    return res.json({ ok: true, message: message.isPinned ? "Message unpinned" : "Message pinned" });
+    return res.json({ ok: true, message: nextPinned ? "Message pinned" : "Message unpinned" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import DiscussionForum from "../../components/DiscussionForum";
 import "./EventDetails.css";
 
 export default function EventRegistrations() {
@@ -124,6 +125,13 @@ export default function EventRegistrations() {
           title="Mark Attendance"
         >
           ✅ Mark Attendance
+        </button>
+        <button 
+          className="edit-btn" 
+          onClick={() => navigate(`/organizer/events/${eventId}/feedback`)}
+          title="View Feedback"
+        >
+          📝 View Feedback
         </button>
       </div>
 
@@ -295,6 +303,10 @@ export default function EventRegistrations() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="event-info-section">
+        <DiscussionForum isOrganizer={true} eventId={eventId} />
       </section>
     </div>
   );

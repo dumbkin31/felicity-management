@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import axios from "axios";
+import { useParams, useNavigate } from "react-router-dom";
+import api from "../../api/axios";
+import Navbar from "../../components/Navbar";
 import "./EventFeedback.css";
 
 const EventFeedback = () => {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const [feedback, setFeedback] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,12 +19,8 @@ const EventFeedback = () => {
 
   const fetchFeedback = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/organizer/feedback/${eventId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await api.get(
+        `/organizer/feedback/${eventId}`
       );
 
       if (response.data.ok) {
@@ -36,10 +34,23 @@ const EventFeedback = () => {
     }
   };
 
-  const handleExport = () => {
-    const token = localStorage.getItem("token");
-    const url = `${import.meta.env.VITE_API_BASE_URL}/organizer/feedback/${eventId}/export`;
-    window.open(`${url}?token=${token}`, "_blank");
+  const handleExport = async () => {
+    try {
+      const response = await api.get(
+        `/organizer/feedback/${eventId}/export`,
+        { responseType: "blob" }
+      );
+
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `feedback-${eventId}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to export feedback");
+    }
   };
 
   const filteredFeedback = filter === "all"
@@ -49,8 +60,13 @@ const EventFeedback = () => {
   if (loading) return <div className="loading">Loading feedback...</div>;
 
   return (
-    <div className="event-feedback">
+    <>
+      <Navbar />
+      <div className="event-feedback">
       <div className="header-section">
+        <button onClick={() => navigate(-1)} className="back-btn">
+          ← Back
+        </button>
         <h2>Event Feedback</h2>
         {feedback.length > 0 && (
           <button onClick={handleExport} className="export-btn">
@@ -140,7 +156,8 @@ const EventFeedback = () => {
           <p>No feedback has been submitted for this event yet.</p>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
