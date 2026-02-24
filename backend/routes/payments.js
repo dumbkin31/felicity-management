@@ -1,9 +1,10 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
-const { registrationsCol } = require("../config/collections");
+const { registrationsCol, eventsCol } = require("../config/collections");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
 const QRCode = require("qrcode");
+const { sendPaymentApprovalEmail, sendPaymentRejectionEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -156,7 +157,6 @@ router.put("/organizer/payments/approve/:registrationId", requireAuth, requireRo
 
     // Decrement stock for merchandise events
     if (registration.eventType === "merch" && registration.quantity) {
-      const { eventsCol } = require("../config/collections");
       const events = eventsCol();
       await events.updateOne(
         { _id: new ObjectId(registration.eventId) },
@@ -164,7 +164,23 @@ router.put("/organizer/payments/approve/:registrationId", requireAuth, requireRo
       );
     }
 
-    // TODO: Send confirmation email with QR code
+    // Get event details for email
+    const events = eventsCol();
+    const event = await events.findOne({ _id: new ObjectId(registration.eventId) });
+
+    // Send payment approval email with QR code
+    await sendPaymentApprovalEmail({
+      to: registration.participantEmail,
+      participantName: registration.participantName,
+      eventName: event?.name || "Event",
+      ticketId: registration.ticketId,
+      qrCodeDataUrl: qrCode,
+      eventType: registration.eventType || "normal",
+      eventDetails: {
+        startAt: event?.startAt,
+        quantity: registration.quantity,
+      },
+    });
 
     return res.json({ 
       ok: true, 
@@ -208,6 +224,15 @@ router.put("/organizer/payments/reject/:registrationId", requireAuth, requireRol
         },
       }
     );
+
+    // Send payment rejection email
+    await sendPaymentRejectionEmail({
+      to: registration.participantEmail,
+      participantName: registration.participantName,
+      eventName: "Event",
+      ticketId: registration.ticketId,
+      reason: reason || "Your payment proof was rejected. Please upload a new one.",
+    });
 
     return res.json({ ok: true, message: "Payment rejected" });
   } catch (err) {
