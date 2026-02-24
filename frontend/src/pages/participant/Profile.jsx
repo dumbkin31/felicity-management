@@ -44,7 +44,7 @@ export default function Profile() {
       setCollegeOrOrgName(data.collegeOrOrgName || "");
       setSelectedInterests(data.interests || []);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to load profile");
+      error(err.response?.data?.error || "Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -67,8 +67,6 @@ export default function Profile() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
-    setSuccess("");
 
     try {
       const updates = {
@@ -80,14 +78,14 @@ export default function Profile() {
       };
 
       await api.put("/participants/me", updates);
-      setSuccess("Profile updated successfully!");
+      success("Profile updated successfully!");
       setEditing(false);
       setEditingInterests(false);
       
       // Refresh profile
       await fetchProfile();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to update profile");
+      error(err.response?.data?.error || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -340,8 +338,7 @@ export default function Profile() {
             )}
           </div>
 
-          {passwordError && <div className="error">{passwordError}</div>}
-          {passwordSuccess && <div className="success">{passwordSuccess}</div>}
+
 
           {changingPassword ? (
             <form onSubmit={handlePasswordChange} className="profile-form">
